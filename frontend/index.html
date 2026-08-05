@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TikTok Live - Conquista de América</title>
+    
+    <!-- Fuente gaming -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Dependencias -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="root-wrapper">
+    <!-- Contenedor del Mapa SVG y Canvas — PANTALLA COMPLETA -->
+    <div id="map-svg-container">
+        <canvas id="grid-canvas"></canvas>
+    </div>
+
+    <!-- Contenedor de Phaser para partículas -->
+    <div id="game-container"></div>
+
+    <!-- Alertas Gigantes (Eventos) -->
+    <div id="giant-alert-container">
+        <!-- El contenido se inyecta por JS -->
+    </div>
+
+    <!-- Banner X2 Frenesí -->
+    <div id="x2-banner">
+        ¡FRENESÍ X2! Todo vale DOBLE <br><span id="x2-timer">03:00</span>
+    </div>
+
+    <!-- ====== UI OVERLAY ====== -->
+    <div id="ui-layer">
+        
+        <!-- HEADER ULTRA-COMPACTO -->
+        <div class="top-header">
+            <div class="header-left">
+                <span class="header-icon">⚔️</span>
+                <span class="header-title">CONQUISTA</span>
+            </div>
+            <div class="header-center">
+                <span class="header-dominant-label">👑</span>
+                <span id="dominante-name" class="header-dominant-name">---</span>
+                <div class="header-power-bar">
+                    <div id="poder-bar" class="header-power-fill"></div>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="header-live-dot"></span>
+                <span class="header-live-text">LIVE</span>
+            </div>
+        </div>
+
+        <!-- BARRA DE GUERRA (overlay flotante sobre el mapa) -->
+        <div id="war-bar-container" class="war-overlay hidden">
+            <div class="war-teams">
+                <span id="war-attacker" class="war-label attacker">Atacante</span>
+                <span class="war-vs">⚔️</span>
+                <span id="war-defender" class="war-label defender">Defensor</span>
+            </div>
+            <div class="war-progress-bg">
+                <div id="war-progress-fill" class="war-progress-fill"></div>
+            </div>
+        </div>
+
+        <!-- ALERTAS GIGANTES (centro de pantalla) -->
+        <div id="giant-alert-container"></div>
+
+        <!-- ZONA INFERIOR: Feed de chat + Ranking -->
+        <div class="bottom-zone">
+            
+            <!-- FEED DE EVENTOS (estilo chat TikTok) -->
+            <div id="event-feed" class="chat-feed">
+                <!-- Mensajes dinámicos -->
+            </div>
+
+            <!-- RANKING COMPACTO -->
+            <div class="ranking-strip">
+                <div class="ranking-header">🏆 TOP</div>
+                <ul id="ranking-list" class="ranking-inline">
+                    <!-- Se llenará dinámicamente -->
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- ====== LEYENDA DE DONACIONES Y TUTORIAL ====== -->
+        <div id="legend-panel">
+            <div class="legend-title">⚔️ ¿CÓMO JUGAR? ⚔️</div>
+            <div class="tutorial-banner">
+                <span>1️⃣ Busca tu bandera</span>
+                <span>2️⃣ Envía el regalo 🎁</span>
+            </div>
+            <div class="legend-list">
+
+                <div class="legend-item" data-pais="brasil">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/br.png" alt="BR"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/Guiño.webp" alt="Guiño"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="argentina">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/ar.png" alt="AR"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/rosa_blanca.webp" alt="White Rose"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="mexico">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/mx.png" alt="MX"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift">🌹 Rosa</span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="peru">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/pe.png" alt="PE"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/cono_helado.webp" alt="Cono"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="colombia">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/co.png" alt="CO"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/tiktok.webp" alt="TikTok"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="bolivia">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/bo.png" alt="BO"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/pastel.webp" alt="Cake"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="venezuela">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/ve.png" alt="VE"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/gg.webp" alt="GG"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="chile">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/cl.png" alt="CL"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/maracas.webp" alt="Maracas"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="paraguay">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/py.png" alt="PY"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/radio.webp" alt="Radio"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="ecuador">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/ec.png" alt="EC"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/eres_increible.webp" alt="Eres increible"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="uruguay">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/uy.png" alt="UY"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/Pop.webp" alt="Pop"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="el_salvador">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/sv.png" alt="SV"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/heart%20me.webp" alt="Heart"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="costa_rica">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/cr.png" alt="CR"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/Te%20adoro.webp" alt="Te adoro"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+                <div class="legend-item" data-pais="panama">
+                    <span class="legend-flag"><img src="https://flagcdn.com/w20/pa.png" alt="PA"></span>
+                    <div class="legend-info">
+                        <span class="legend-gift"><img src="assets/regalos/it´s_corn.webp" alt="Corn"></span>
+                    </div>
+                    <span class="legend-force force-mid">+5%</span>
+                </div>
+
+                <!-- ITEM ESPECIAL: APOCALIPSIS -->
+                <div class="legend-item full-width" data-pais="apocalipsis">
+                    <span class="legend-flag">☄️</span>
+                    <div class="legend-info" style="align-items: center;">
+                        <span class="legend-gift" style="color:#ff0050; font-weight:900; gap: 6px;">
+                            <img src="assets/regalos/Galaxy.webp" alt="Galaxia" style="width:22px; height:22px; filter: drop-shadow(0 0 5px #00f2fe);"> Galaxia
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- AUDIO DE FONDO -->
+    <button id="btn-audio" class="btn-audio">🔊 Activar Música</button>
+    <audio id="bg-music" src="DAI-DAI.mp3" type="audio/mpeg" loop preload="auto"></audio>
+
+    <!-- Scripts del juego -->
+    <script src="paises.js"></script>
+    <script src="config.js"></script>
+    <script src="animaciones.js"></script>
+    <script src="grid.js"></script>
+    <script src="mapa.js"></script>
+    <script src="juego.js"></script>
+
+    </div><!-- /#root-wrapper -->
+</body>
+</html>
