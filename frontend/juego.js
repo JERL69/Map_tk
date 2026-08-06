@@ -375,6 +375,25 @@ if (btnAudio) {
     });
 }
 
+// ================= MIGRACIÓN Y MINIMIZADO DE LEYENDA =================
+const btnToggleLegend = document.getElementById('btn-toggle-legend');
+const legendBody = document.getElementById('legend-body');
+const legendHeaderBar = document.getElementById('legend-header-bar');
+
+if (btnToggleLegend && legendBody) {
+    const toggleFunc = () => {
+        const isCollapsed = legendBody.classList.toggle('collapsed');
+        btnToggleLegend.innerText = isCollapsed ? '➕' : '➖';
+    };
+    btnToggleLegend.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFunc();
+    });
+    if (legendHeaderBar) {
+        legendHeaderBar.addEventListener('click', toggleFunc);
+    }
+}
+
 // ================= ATAJOS DE TECLADO =================
 document.addEventListener('keydown', (e) => {
     // Si presionas Shift + R, se reinicia el juego

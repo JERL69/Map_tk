@@ -238,15 +238,12 @@ class MapaGeografico {
     // ─────────────────────────────────────────────────
     _aplicarProyeccion() {
         const isVertical = this.width < this.height;
-        // padLeft: margen izquierdo para que México quede dentro de la pantalla
-        const padLeft   = isVertical ? 8   : 10;
-        // padTop: bajamos el mapa a 105px para librar los overlays nativos superiores de TikTok Live
-        const padTop    = isVertical ? 105 : 40;
-        // padBottom: libramos el chat inferior de TikTok Live
-        const padBottom = isVertical ? 145 : 75;
-        // legendPad: reservamos el 44% derecho para que la leyenda de regalos no solape ningún país
-        const legendPad = isVertical ? Math.floor(this.width * 0.44) : 210;
-        const extX = Math.max(10, this.width - legendPad);
+        const padLeft   = isVertical ? 8   : 12;
+        const padRight  = isVertical ? 8   : 12;
+        const padTop    = isVertical ? 45  : 30;
+        const padBottom = isVertical ? 115 : 70;
+
+        const extX = Math.max(10, this.width  - padRight);
         const extY = Math.max(padTop + 10, this.height - padBottom);
 
         try {
