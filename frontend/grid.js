@@ -571,11 +571,14 @@ class GridManager {
     }
 }
 
-// Instanciar globalmente (Resolución de 3 px para efecto orgánico de enjambre)
+// Instanciar globalmente (Resolución de 1 px para evitar pixelado)
 // Usar el wrapper 9:16 para que el grid encaje en TikTok LIVE Studio
 ;(function() {
     const _wrapper = document.getElementById('root-wrapper');
     const _w = _wrapper ? _wrapper.offsetWidth  : window.innerWidth;
     const _h = _wrapper ? _wrapper.offsetHeight : window.innerHeight;
-    window.gridManager = new GridManager(_w, _h, 3);
+    
+    // Si se está en un entorno de alta resolución (como OBS o Retina), escalamos
+    const dpr = window.devicePixelRatio || 1;
+    window.gridManager = new GridManager(_w, _h, 1);
 })();
