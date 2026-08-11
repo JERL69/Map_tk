@@ -772,60 +772,60 @@ html {
 }
 
 .tutorial-title {
-    font-size: 15px;
+    font-size: 10px;
     font-weight: 900;
     color: #ffffff;
     text-align: center;
     text-transform: uppercase;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
-    margin-bottom: 6px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    margin-bottom: 4px;
     letter-spacing: 1px;
 }
 
 .tutorial-steps {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
 }
 
 .tutorial-step {
-    font-size: 12px;
+    font-size: 8px;
     font-weight: 700;
     color: #e2e8f0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .tutorial-step span {
     background: #00f2fe;
     color: #000;
     border-radius: 50%;
-    width: 18px;
-    height: 18px;
+    width: 12px;
+    height: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 8px;
     font-weight: 900;
 }
 
 #legend-panel {
     position: absolute;
-    top: 82px;
-    right: 9px;
+    top: 55px;
+    right: 6px;
     width: 38%;
-    max-width: 218px;
+    max-width: 145px;
     z-index: 20;
     display: flex;
     flex-direction: column;
     background: rgba(2, 6, 20, 0.65);
     border: 1px solid rgba(0, 242, 254, 0.3);
-    border-radius: 15px;
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     overflow: hidden;
-    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     pointer-events: auto;
     transition: all 0.3s ease;
 }
@@ -834,26 +834,26 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 9px;
+    padding: 3px 6px;
     background: rgba(0, 242, 254, 0.15);
     border-bottom: 1px solid rgba(0, 242, 254, 0.2);
     cursor: pointer;
 }
 
 .legend-title {
-    font-size: 13px;
+    font-size: 8.5px;
     font-weight: 900;
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: #00f2fe;
-    text-shadow: 0 0 15px rgba(0, 242, 254, 0.7);
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.7);
 }
 
 .btn-toggle-legend {
     background: transparent;
     border: none;
     color: #00f2fe;
-    font-size: 15px;
+    font-size: 10px;
     font-weight: 900;
     cursor: pointer;
     padding: 0 2px;
@@ -863,7 +863,7 @@ html {
 .legend-body {
     transition: max-height 0.3s ease, opacity 0.3s ease;
     overflow: hidden;
-    max-height: 750px;
+    max-height: 500px;
     opacity: 1;
 }
 
@@ -879,8 +879,8 @@ html {
     gap: 1px;
     background: rgba(255, 0, 80, 0.2);
     border-bottom: 1px solid rgba(255, 0, 80, 0.3);
-    padding: 2px 6px;
-    font-size: 11px;
+    padding: 2px 4px;
+    font-size: 7.5px;
     font-weight: 800;
     color: #ffffff;
 }
@@ -890,28 +890,28 @@ html {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 2px;
-    padding: 6px;
+    padding: 4px;
     overflow: hidden;
 }
 .legend-list::-webkit-scrollbar { display: none; }
 
 .legend-group-label {
-    font-size: 16px;
+    font-size: 11px;
     font-weight: 900;
-    letter-spacing: 4px;
+    letter-spacing: 2.5px;
     text-transform: uppercase;
     color: rgba(255,255,255,0.55);
-    padding: 14px 18px 6px;
-    margin-top: 6px;
+    padding: 9px 12px 4px;
+    margin-top: 4px;
 }
 
 /* Item compacto: flag + nombre en fila */
 .legend-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border-radius: 9px;
+    gap: 4px;
+    padding: 3px 5px;
+    border-radius: 6px;
     cursor: default;
     transition: background 0.2s ease;
     border: 1px solid transparent;
@@ -928,27 +928,27 @@ html {
     justify-content: center;
     background: rgba(255, 0, 80, 0.1);
     border: 1px solid rgba(255, 0, 80, 0.4);
-    box-shadow: 0 0 15px rgba(255, 0, 80, 0.2);
+    box-shadow: 0 0 10px rgba(255, 0, 80, 0.2);
 }
 
 .legend-item.full-width .legend-info {
     flex-direction: row;
-    gap: 12px;
+    gap: 8px;
 }
 
 /* País activo */
 .legend-item.active {
     background: rgba(0, 242, 254, 0.14);
     border-color: rgba(0, 242, 254, 0.35);
-    box-shadow: 0 0 9px rgba(0, 242, 254, 0.15);
+    box-shadow: 0 0 6px rgba(0, 242, 254, 0.15);
 }
 
 .legend-flag {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 18px;
+    width: 16px;
+    height: 12px;
     flex-shrink: 0;
     border-radius: 2px;
     overflow: hidden;
@@ -974,7 +974,7 @@ html {
 }
 
 .legend-gift {
-    font-size: 14px;
+    font-size: 9px;
     font-weight: 700;
     color: #e2e8f0;
     display: flex;
@@ -983,7 +983,7 @@ html {
 }
 
 .legend-gift img {
-    height: 27px;
+    height: 18px;
     width: auto;
     object-fit: contain;
     filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.5));
@@ -991,10 +991,10 @@ html {
 
 /* Fuerza: compacta al final de cada chip */
 .legend-force {
-    font-size: 12px;
+    font-size: 8px;
     font-weight: 900;
-    border-radius: 4px;
-    padding: 1px 4px;
+    border-radius: 3px;
+    padding: 1px 3px;
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -1015,14 +1015,14 @@ html {
     color: #f97316;
     background: rgba(249, 115, 22, 0.15);
     border: 1px solid rgba(249, 115, 22, 0.3);
-    text-shadow: 0 0 9px rgba(249, 115, 22, 0.5);
+    text-shadow: 0 0 6px rgba(249, 115, 22, 0.5);
 }
 
 .force-boss {
     color: #e879f9;
     background: rgba(232, 121, 249, 0.15);
     border: 1px solid rgba(232, 121, 249, 0.35);
-    text-shadow: 0 0 12px rgba(232, 121, 249, 0.7);
+    text-shadow: 0 0 8px rgba(232, 121, 249, 0.7);
     animation: boss-pulse 2s ease-in-out infinite;
 }
 
