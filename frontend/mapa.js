@@ -453,7 +453,7 @@ class MapaGeografico {
 
         bboxes.forEach(b => {
             // Tamaño base según categoría — escala invariante (se mantiene legible al zoom)
-            const baseSize = b.sizeCategory === 'lg' ? 27 : b.sizeCategory === 'md' ? 14 : 10;
+            const baseSize = b.sizeCategory === 'lg' ? 22 : b.sizeCategory === 'md' ? 11 : 8;
             const size = (baseSize * Math.pow(k, 0.48)) / k;
 
             // Países pequeños: abreviatura al zoom bajo, nombre completo al zoom alto
