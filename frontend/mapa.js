@@ -238,10 +238,10 @@ class MapaGeografico {
     // ─────────────────────────────────────────────────
     _aplicarProyeccion() {
         const isVertical = this.width < this.height;
-        const padLeft   = isVertical ? 8   : 12;
-        const padRight  = isVertical ? 8   : 12;
-        const padTop    = isVertical ? 45  : 30;
-        const padBottom = isVertical ? 115 : 70;
+        const padLeft   = isVertical ? 25  : 20;
+        const padRight  = isVertical ? 25  : 20;
+        const padTop    = isVertical ? 65  : 40;
+        const padBottom = isVertical ? 135 : 90;
 
         const extX = Math.max(10, this.width  - padRight);
         const extY = Math.max(padTop + 10, this.height - padBottom);

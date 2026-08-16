@@ -813,7 +813,7 @@ html {
 #legend-panel {
     position: absolute;
     top: 55px;
-    right: 6px;
+    right: 20px;
     width: max-content;
     max-width: 90%;
     z-index: 20;
