@@ -240,8 +240,8 @@ class MapaGeografico {
         const isVertical = this.width < this.height;
         const padLeft   = isVertical ? 50  : 20;
         const padRight  = isVertical ? 50  : 20;
-        const padTop    = isVertical ? 120 : 40;
-        const padBottom = isVertical ? 200 : 90;
+        const padTop    = isVertical ? 200 : 70;
+        const padBottom = isVertical ? 120 : 60;
 
         const extX = Math.max(10, this.width  - padRight);
         const extY = Math.max(padTop + 10, this.height - padBottom);
