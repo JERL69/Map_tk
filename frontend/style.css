@@ -886,10 +886,10 @@ html {
     color: #ffffff;
 }
 
-/* Grid 3 columnas — layout horizontal compacto */
+/* Grid 4 columnas — layout horizontal compacto */
 .legend-list {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 2px;
     padding: 4px;
     overflow: hidden;
