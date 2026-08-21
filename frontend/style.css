@@ -878,14 +878,12 @@ html {
     flex-direction: column;
     align-items: center;
     gap: 1px;
-    background: rgba(255, 0, 80, 0.35);
-    border-bottom: 1px solid rgba(255, 0, 80, 0.4);
-    padding: 6px 8px;
-    font-size: 11px;
+    background: rgba(255, 0, 80, 0.2);
+    border-bottom: 1px solid rgba(255, 0, 80, 0.3);
+    padding: 2px 4px;
+    font-size: 7.5px;
     font-weight: 800;
-    color: #ffdd00;
-    text-align: center;
-    text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8);
+    color: #ffffff;
 }
 
 /* Grid 4 columnas — layout horizontal compacto */
