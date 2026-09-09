@@ -44,7 +44,7 @@ socket.on('juego_reiniciado', () => {
 
 socket.on('lluvia_de_bombas', (data) => {
     // 1. Mostrar alerta masiva (pero no ocultamos la UI entera como antes)
-    mostrarAlertaGigante(data.usuario, data.regalo, "∞", "LLUVIA DE BOMBAS");
+    mostrarAlertaGigante(data.usuario, data.regalo, "∞", "EVENTO ESPECIAL");
     const container = document.getElementById('giant-alert-container');
     if (container) {
         container.classList.add('apocalipsis-theme'); 
@@ -56,39 +56,18 @@ socket.on('lluvia_de_bombas', (data) => {
     }
 });
 
-// ================= ESTADO X2 =================
-let x2Interval = null;
-socket.on('x2_estado', (data) => {
-    const banner = document.getElementById('x2-banner');
-    const timerSpan = document.getElementById('x2-timer');
-    if (!banner || !timerSpan) return;
+// ================= EVENTO AMBIENTAL DE MAPA =================
+// Efecto decorativo. No altera el valor de los regalos ni lleva contador.
+socket.on('evento_mapa', (data) => {
+    const banner = document.getElementById('event-banner');
+    if (!banner) return;
 
     if (data.activo) {
         banner.style.display = 'block';
-        let timeLeft = Math.floor(data.duracion / 1000);
-        
-        // Actualizar UI inicial
-        const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-        const s = (timeLeft % 60).toString().padStart(2, '0');
-        timerSpan.innerText = `${m}:${s}`;
-
-        if (x2Interval) clearInterval(x2Interval);
-        
-        x2Interval = setInterval(() => {
-            timeLeft--;
-            if (timeLeft <= 0) {
-                clearInterval(x2Interval);
-            }
-            const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-            const secs = (timeLeft % 60).toString().padStart(2, '0');
-            timerSpan.innerText = `${mins}:${secs}`;
-        }, 1000);
-
-        // Alerta inicial para llamar la atención
-        mostrarAlertaGigante("SISTEMA", "X2", "2x", "¡FRENESÍ! TODO VALE DOBLE");
+        if (window.gridManager) window.gridManager.iniciarTormenta();
     } else {
         banner.style.display = 'none';
-        if (x2Interval) clearInterval(x2Interval);
+        if (window.gridManager) window.gridManager.detenerTormenta();
     }
 });
 
@@ -116,11 +95,47 @@ socket.on('tiktok_feed', (mensaje) => {
     agregarEventoFeed(mensaje);
 });
 
+// Racha de un país: regalos consecutivos dentro de una ventana corta.
+// No ocupa espacio nuevo, se muestra dentro de la barra de guerra existente.
+const RACHA_VENTANA_MS = 8000;
+let racha = { pais: null, cuenta: 0, ultimo: 0 };
+
+function registrarRacha(paisId) {
+    const ahora = Date.now();
+    if (racha.pais === paisId && ahora - racha.ultimo <= RACHA_VENTANA_MS) {
+        racha.cuenta++;
+    } else {
+        racha = { pais: paisId, cuenta: 1, ultimo: ahora };
+    }
+    racha.ultimo = ahora;
+    return racha.cuenta;
+}
+
 // Escuchar los eventos del GiftQueue del backend
 socket.on('attack', (data) => {
-    const { atacante, defensor, porcentaje, usuario, regalo, multiplicador, nombrePais } = data;
+    const { atacante, porcentaje, usuario, regalo, multiplicador, nombrePais } = data;
+
+    // Quién defiende lo decide el grid, que es la fuente de verdad del territorio:
+    // se prioriza al vecino que retenga territorio original del atacante.
+    let defensor = data.defensor;
+    if (window.gridManager && window.gridManager.numCells > 0 && data.vecinos) {
+        defensor = window.gridManager.elegirObjetivo(atacante, data.vecinos) || defensor;
+    }
+
     const atacanteObj = estadoGlobal[atacante];
     const defensorObj = estadoGlobal[defensor];
+    if (!atacanteObj || !defensorObj) return; // El estado inicial todavía no llegó
+
+    // Racha: el mapa reacciona más fuerte cuando un país recibe regalos seguidos
+    const enRacha = registrarRacha(atacante);
+    const streakEl = document.getElementById('war-streak');
+    if (streakEl) {
+        streakEl.innerText = enRacha >= 3 ? `🔥 x${enRacha}` : '';
+        streakEl.style.display = enRacha >= 3 ? 'inline' : 'none';
+    }
+    if (window.gridManager && (enRacha === 3 || (enRacha > 3 && enRacha % 5 === 0))) {
+        window.gridManager.pulsoPais(atacante);
+    }
     
     // 1. Mostrar Alerta Gigante en Pantalla solo si no está oculta (combos)
     if (!data.ocultarAlerta) {
@@ -175,7 +190,7 @@ socket.on('attack', (data) => {
 
     // 5. Agregar al feed pequeño lateral
     if (!data.ocultarAlerta) {
-        agregarEventoFeed(`💥 ${atacanteObj.nombre} empuja la frontera sobre ${defensorObj.nombre}!`);
+        agregarEventoFeed(`💥 ${atacanteObj.nombre} empuja la frontera con ${defensorObj.nombre}`);
     }
     
     setTimeout(() => {
@@ -183,6 +198,47 @@ socket.on('attack', (data) => {
         mapaInteractivos.setEstadoGuerra(atacante, 'atacante', false);
         mapaInteractivos.setEstadoGuerra(defensor, 'defensor', false);
     }, 1000);
+});
+
+// Anuncio de un evento del mapa: no hay usuario ni regalo detrás, así que no
+// usa la plantilla de "X envió Y".
+function mostrarAnuncio(titulo, subtitulo) {
+    const container = document.getElementById('giant-alert-container');
+    if (!container) return;
+
+    while (container.children.length >= 3) container.removeChild(container.firstChild);
+
+    const el = document.createElement('div');
+    el.className = 'giant-alert';
+    el.innerHTML = `
+        <div class="giant-alert-gift">${titulo}</div>
+        <div class="giant-alert-action">${subtitulo}</div>
+    `;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
+}
+
+// Un país arrasado por el evento especial queda en ruinas, no eliminado.
+// Fin de partida: el backend reinicia solo 12 segundos después.
+socket.on('juego_terminado', (data) => {
+    mostrarAnuncio(`🏆 ${data.nombre.toUpperCase()}`, 'conquistó todo el mapa');
+    agregarEventoFeed(`🏆 ${data.nombre} gana la partida`);
+    if (mapaInteractivos) mapaInteractivos.zoomRestaurar(2000);
+});
+
+window.addEventListener('pais_arrasado', (e) => {
+    const pais = estadoGlobal[e.detail.pais];
+    if (!pais) return;
+    mostrarAnuncio(`☠️ ${pais.nombre.toUpperCase()}`, 'ha sido borrado del mapa');
+    agregarEventoFeed(`☠️ ${pais.nombre} queda en ruinas`);
+});
+
+window.addEventListener('pais_resurgido', (e) => {
+    const pais = estadoGlobal[e.detail.pais];
+    if (!pais) return;
+    mostrarAnuncio(`✨ ${pais.nombre.toUpperCase()}`, 'ha resurgido de las ruinas');
+    agregarEventoFeed(`✨ ${pais.nombre} vuelve al mapa`);
+    if (mapaInteractivos) mapaInteractivos.zoomAPais(e.detail.pais, 1500, 3.5);
 });
 
 function mostrarAlertaGigante(usuario, regalo, multiplicador, nombrePais) {
@@ -225,7 +281,7 @@ function mostrarAlertaGigante(usuario, regalo, multiplicador, nombrePais) {
     alertEl.innerHTML = `
         <div class="giant-alert-title"><span class="giant-alert-user">${usuario}</span> envió</div>
         <div class="giant-alert-gift">${multiplicador}x ${icono} ${regalo}</div>
-        <div class="giant-alert-action">¡ATAQUE MASIVO POR ${nombrePais}!</div>
+        <div class="giant-alert-action">${nombrePais} avanza en el mapa</div>
     `;
 
     container.appendChild(alertEl);
@@ -237,15 +293,29 @@ function mostrarAlertaGigante(usuario, regalo, multiplicador, nombrePais) {
 }
 
 socket.on('conquista_realizada', (data) => {
+    // Los nombres se leen ANTES de reemplazar el estado, y con respaldo por si
+    // el evento llega antes que el 'estado_inicial'.
     const atacanteObj = estadoGlobal[data.atacante];
     const defensorObj = estadoGlobal[data.defensor];
-    
+    const nombreAtacante = atacanteObj ? atacanteObj.nombre : data.atacante;
+    const nombreDefensor = defensorObj ? defensorObj.nombre : data.defensor;
+
+    // Adoptar el estado autoritativo del servidor. Sin esto el defensor nunca
+    // queda marcado como eliminado en el cliente, sus vecinos quedan obsoletos
+    // y 'victoria_total' se re-reporta en bucle sobre el mismo país.
+    if (data.nuevoEstado) {
+        estadoGlobal = data.nuevoEstado;
+        if (window.gridManager && window.gridManager.numCells > 0) {
+            window.gridManager.syncEstado(estadoGlobal);
+        }
+    }
+
     document.getElementById('war-bar-container').classList.add('hidden');
 
     mapaInteractivos.setEstadoGuerra(data.atacante, 'atacante', false);
     mapaInteractivos.setEstadoGuerra(data.defensor, 'defensor', false);
 
-    agregarEventoFeed(`👑 ${atacanteObj.nombre} ha asimilado completamente a ${defensorObj.nombre}!`);
+    agregarEventoFeed(`👑 ${nombreAtacante} se expandió sobre ${nombreDefensor}`);
 
     actualizarInterfazUI(estadoGlobal);
 });

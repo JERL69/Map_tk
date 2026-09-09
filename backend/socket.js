@@ -14,6 +14,9 @@ function setupSocket(server) {
     // Mapa de conexiones activas para evitar duplicados en producción
     const activeStreams = new Map();
 
+    // Evita disparar dos finales si llegan varios reportes de victoria juntos
+    let finalEnCurso = false;
+
     io.on('connection', (socket) => {
         console.log('Un cliente se ha conectado:', socket.id);
 
@@ -65,6 +68,21 @@ function setupSocket(server) {
                     defensor,
                     nuevoEstado: gameEngine.getEstadoActual()
                 });
+
+                // Fin de partida: un solo superviviente. Se anuncia y se reinicia
+                // solo, para que la transmisión arranque una ronda nueva.
+                const ganador = gameEngine.hayGanador();
+                if (ganador && !finalEnCurso) {
+                    finalEnCurso = true;
+                    console.log(`[JUEGO] ${ganador.nombre} conquistó el mapa. Reinicio en 12s.`);
+                    io.emit('juego_terminado', { id: ganador.id, nombre: ganador.nombre });
+
+                    setTimeout(() => {
+                        io.emit('estado_inicial', gameEngine.reiniciarEstado());
+                        io.emit('juego_reiniciado');
+                        finalEnCurso = false;
+                    }, 12000);
+                }
             }
         });
 

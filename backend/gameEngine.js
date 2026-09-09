@@ -18,62 +18,9 @@ const estadoPaises = {
 
 const estadoInicialStr = JSON.stringify(estadoPaises);
 
-// ================= SISTEMA DE AGGRO (MEMORIA) =================
-// Mapa de agresiones: { 'victimaId': { 'agresorId': { damage: number, lastAttack: timestamp } } }
-const aggroMap = {};
-const AGGRO_TIMEOUT = 45000; // 45 segundos para perdonar
-
-function registrarAtaque(atacanteId, defensorId, porcentaje) {
-    if (!aggroMap[defensorId]) aggroMap[defensorId] = {};
-    if (!aggroMap[defensorId][atacanteId]) {
-        aggroMap[defensorId][atacanteId] = { damage: 0, lastAttack: 0 };
-    }
-    
-    aggroMap[defensorId][atacanteId].damage += porcentaje;
-    aggroMap[defensorId][atacanteId].lastAttack = Date.now();
-}
-
-function obtenerObjetivosInteligentes(paisId, posiblesDefensores) {
-    if (posiblesDefensores.length === 0) return [];
-    
-    const misAgresores = aggroMap[paisId];
-    if (!misAgresores) {
-        // Modo Pacífico: atacar al azar
-        return [posiblesDefensores[Math.floor(Math.random() * posiblesDefensores.length)]];
-    }
-    
-    const ahora = Date.now();
-    const agresoresActivos = [];
-    
-    for (const agresorId in misAgresores) {
-        // Solo considerar a los que están en mis fronteras actuales y que el ataque sea reciente
-        if (posiblesDefensores.includes(agresorId)) {
-            const timeSinceAttack = ahora - misAgresores[agresorId].lastAttack;
-            if (timeSinceAttack <= AGGRO_TIMEOUT) {
-                agresoresActivos.push({ id: agresorId, damage: misAgresores[agresorId].damage });
-            } else {
-                // Borrar agresores viejos
-                delete misAgresores[agresorId];
-            }
-        }
-    }
-    
-    if (agresoresActivos.length === 0) {
-        // Modo Pacífico (los agresores ya se olvidaron o murieron)
-        return [posiblesDefensores[Math.floor(Math.random() * posiblesDefensores.length)]];
-    }
-    
-    if (agresoresActivos.length >= 3) {
-        // Modo Supervivencia (Onda Expansiva): Devuelve TODOS los agresores
-        return agresoresActivos.map(a => a.id);
-    }
-    
-    // Modo Venganza Concentrada (1 o 2 agresores): Atacar al que más daño hizo
-    agresoresActivos.sort((a, b) => b.damage - a.damage);
-    return [agresoresActivos[0].id];
-}
-// ===============================================================
-
+// El juego no tiene objetivos automáticos: el territorio solo cambia cuando
+// llega un regalo, y quién defiende lo decide el grid del cliente según quién
+// tenga territorio original del atacante.
 
 function reiniciarEstado() {
     const estadoLimpio = JSON.parse(estadoInicialStr);
@@ -139,16 +86,22 @@ function procesarConquista(atacanteId, defensorId) {
 
     return { 
         exito: true, 
-        mensaje: `${atacante.nombre} asimiló a ${defensor.nombre}` 
+        mensaje: `${atacante.nombre} se expandió sobre ${defensor.nombre}` 
     };
+}
+
+// Un país arrasado por bombas sigue vivo (puede resurgir), así que la partida
+// solo termina cuando queda un único país sin eliminar.
+function hayGanador() {
+    const vivos = Object.values(estadoPaises).filter(p => !p.eliminado);
+    return vivos.length === 1 ? vivos[0] : null;
 }
 
 module.exports = {
     getEstadoActual,
+    hayGanador,
     getOwnerReal,
     procesarConquista,
     reiniciarEstado,
-    estadoPaises,
-    registrarAtaque,
-    obtenerObjetivosInteligentes
+    estadoPaises
 };

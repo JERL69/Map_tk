@@ -12,6 +12,7 @@ class GridManager {
         
         // Arrays tipados para máximo rendimiento
         this.ownerGrid = new Uint8Array(this.numCells);
+        this.originalOwnerGrid = new Uint8Array(this.numCells); // Dueño original de cada celda
         this.powerGrid = new Uint8Array(this.numCells); // 0 a 100
         this.glowGrid = new Uint8Array(this.numCells);  // 0 a 255 (Efecto visual)
         
@@ -172,6 +173,8 @@ class GridManager {
         let frameCount = 0;
         const render = () => {
             frameCount++;
+            // Latido de las zonas en disputa: hace que el frente de batalla "respire"
+            const pulso = 0.65 + 0.35 * Math.sin(frameCount * 0.18);
             // Limpiar fondo
             this.buf.fill(0);
 
@@ -190,9 +193,10 @@ class GridManager {
                     let b = color[2];
 
                     if (glow > 0) {
-                        r = Math.min(255, r + glow);
-                        g = Math.min(255, g + glow);
-                        b = Math.min(255, b + glow);
+                        const gp = (glow * pulso) | 0;
+                        r = Math.min(255, r + gp);
+                        g = Math.min(255, g + gp);
+                        b = Math.min(255, b + gp);
                         this.glowGrid[cellIndex] = Math.max(0, glow - 3); // Apagar suavemente el brillo
                     }
 
@@ -252,11 +256,108 @@ class GridManager {
         requestAnimationFrame(render);
     }
 
+    // Destello sobre todo el territorio de un país (usado en las rachas)
+    pulsoPais(paisStr) {
+        const intId = this.paisStrToInt[paisStr];
+        if (!intId) return;
+        for (let i = 0; i < this.numCells; i++) {
+            if (this.ownerGrid[i] === intId) this.glowGrid[i] = 255;
+        }
+    }
+
+    tieneTerritorio(intId) {
+        for (let i = 0; i < this.numCells; i++) if (this.ownerGrid[i] === intId) return true;
+        return false;
+    }
+
+    // Un país borrado del mapa vuelve con su siguiente regalo: se replanta sobre
+    // su territorio histórico, empezando por las ruinas (tierra muerta) y creciendo
+    // desde el centro hacia afuera, para que resurja con su silueta reconocible.
+    revivirPais(paisStr) {
+        const intId = this.paisStrToInt[paisStr];
+        if (!intId || !this.originalOwnerGrid) return 0;
+
+        const originales = [];
+        for (let i = 0; i < this.numCells; i++) {
+            if (this.originalOwnerGrid[i] === intId) originales.push(i);
+        }
+        if (originales.length === 0) return 0;
+
+        let sx = 0, sy = 0;
+        for (let k = 0; k < originales.length; k++) {
+            sx += originales[k] % this.cols;
+            sy += Math.floor(originales[k] / this.cols);
+        }
+        const cx = sx / originales.length, cy = sy / originales.length;
+
+        originales.sort((a, b) => {
+            // Las ruinas sin dueño primero: resucitar no le roba tierra a nadie
+            const da = this.ownerGrid[a] === 255 ? 0 : 1;
+            const db = this.ownerGrid[b] === 255 ? 0 : 1;
+            if (da !== db) return da - db;
+            const ax = (a % this.cols) - cx, ay = Math.floor(a / this.cols) - cy;
+            const bx = (b % this.cols) - cx, by = Math.floor(b / this.cols) - cy;
+            return (ax * ax + ay * ay) - (bx * bx + by * by);
+        });
+
+        const cuantas = Math.min(originales.length, Math.max(25, Math.floor(originales.length * 0.10)));
+        for (let k = 0; k < cuantas; k++) {
+            const i = originales[k];
+            this.ownerGrid[i] = intId;
+            this.powerGrid[i] = 100;
+            this.glowGrid[i]  = 255;
+        }
+        return cuantas;
+    }
+
+    // Elige contra quién empuja un país. Si algún vecino le tiene territorio
+    // original, ataca al que más le tenga (recuperación). Si no perdió nada,
+    // se expande contra un vecino al azar.
+    elegirObjetivo(atacanteStr, vecinos) {
+        if (!vecinos || vecinos.length === 0) return null;
+        const alAzar = () => vecinos[Math.floor(Math.random() * vecinos.length)];
+
+        const atacanteId = this.paisStrToInt[atacanteStr];
+        if (!atacanteId || !this.originalOwnerGrid) return alAzar();
+
+        // Cuántas celdas originales del atacante retiene hoy cada vecino
+        const robadas = {};
+        for (let v = 0; v < vecinos.length; v++) {
+            const vid = this.paisStrToInt[vecinos[v]];
+            if (vid) robadas[vid] = 0;
+        }
+
+        for (let i = 0; i < this.numCells; i++) {
+            if (this.originalOwnerGrid[i] === atacanteId) {
+                const actual = this.ownerGrid[i];
+                if (actual !== atacanteId && robadas[actual] !== undefined) robadas[actual]++;
+            }
+        }
+
+        let mejor = null, max = 0;
+        for (const vid in robadas) {
+            if (robadas[vid] > max) {
+                max = robadas[vid];
+                mejor = this.paisIntToStr[vid];
+            }
+        }
+
+        return mejor || alAzar();
+    }
+
     iniciarInfeccion(atacanteStr, defensorStr, porcentaje = 0.05) {
         const atacanteId = this.paisStrToInt[atacanteStr];
         const defensorId = this.paisStrToInt[defensorStr];
         
         if (!atacanteId || !defensorId) return;
+
+        // Si el atacante fue borrado del mapa, este regalo no se pierde: lo trae de vuelta.
+        if (!this.tieneTerritorio(atacanteId)) {
+            if (this.revivirPais(atacanteStr) > 0) {
+                window.dispatchEvent(new CustomEvent('pais_resurgido', { detail: { pais: atacanteStr } }));
+            }
+            return;
+        }
 
         // Recuperar "Tierra Muerta" (255) adyacente rápidamente
         let recuperoTierra = false;
@@ -383,8 +484,14 @@ class GridManager {
             let damagePerCell = Math.max(1, Math.ceil(tickDamage / celdasFrontera.length));
             let nuevasFronteras = [];
 
-            // Desordenar ligeramente para que el borde no se vea lineal
+            // Desordenar para que el borde no se vea lineal...
             celdasFrontera.sort(() => Math.random() - 0.5);
+            // ...pero recuperar primero el territorio propio original. El sort de
+            // JS es estable, así que el desorden se conserva dentro de cada grupo.
+            celdasFrontera.sort((a, b) =>
+                (this.originalOwnerGrid[a] === atacanteId ? 0 : 1) -
+                (this.originalOwnerGrid[b] === atacanteId ? 0 : 1)
+            );
 
             for (let i = 0; i < celdasFrontera.length; i++) {
                 if (tickDamage <= 0) {
@@ -413,7 +520,7 @@ class GridManager {
                 } else {
                     // Celda resiste
                     this.powerGrid[cIdx] -= damagePerCell;
-                    this.glowGrid[cIdx] = 100; // Brillo medio de batalla
+                    this.glowGrid[cIdx] = 140; // Frontera en disputa, latiendo
                     tickDamage -= damagePerCell;
                     nuevasFronteras.push(cIdx);
                 }
@@ -435,17 +542,46 @@ class GridManager {
             }
         }
         
-        // Asimilar celdas caídas que no se procesaron
-        for(let i=0; i<this.numCells; i++) {
+        // Resolver la cadena completa de dueños: si A fue conquistado por B y B
+        // por C, las celdas de A deben terminar en C, no en B (que ya no existe).
+        const resolverDueno = (id) => {
+            let actual = estadoGlobal[id];
+            let saltos = 0;
+            while (actual && actual.owner !== actual.id && estadoGlobal[actual.owner] && saltos++ < 20) {
+                actual = estadoGlobal[actual.owner];
+            }
+            return actual ? actual.id : id;
+        };
+
+        // Asimilar celdas caídas que no se procesaron (255 = tierra muerta, se respeta)
+        for (let i = 0; i < this.numCells; i++) {
             const intId = this.ownerGrid[i];
-            if (intId !== 0 && !dueñosActivos.has(intId)) {
+            if (intId !== 0 && intId !== 255 && !dueñosActivos.has(intId)) {
                 const strId = this.paisIntToStr[intId];
-                if (estadoGlobal[strId] && estadoGlobal[strId].owner) {
-                    this.ownerGrid[i] = this.paisStrToInt[estadoGlobal[strId].owner];
-                }
+                const nuevoDueno = this.paisStrToInt[resolverDueno(strId)];
+                if (nuevoDueno) this.ownerGrid[i] = nuevoDueno;
             }
         }
     }
+    // Tormenta ambiental: destellos aleatorios sobre el territorio ocupado.
+    // Es solo un efecto de render — no toca ownerGrid ni powerGrid.
+    iniciarTormenta() {
+        if (this._tormentaInterval) return;
+        this._tormentaInterval = setInterval(() => {
+            for (let n = 0; n < 120; n++) {
+                const i = Math.floor(Math.random() * this.numCells);
+                if (this.ownerGrid[i] !== 0) this.glowGrid[i] = 200;
+            }
+        }, 80);
+    }
+
+    detenerTormenta() {
+        if (this._tormentaInterval) {
+            clearInterval(this._tormentaInterval);
+            this._tormentaInterval = null;
+        }
+    }
+
     calcularTerritorios() {
         const conteo = {};
         for (let i = 0; i < this.numCells; i++) {
@@ -510,8 +646,10 @@ class GridManager {
                         if (!alive) {
                             const strId = this.paisIntToStr[intId];
                             if (strId) {
-                                window.dispatchEvent(new CustomEvent('victoria_total', {
-                                    detail: { atacante: "Apocalipsis", defensor: strId }
+                                // Nadie lo conquistó, así que NO se elimina: queda en
+                                // ruinas y puede resurgir con su próximo regalo.
+                                window.dispatchEvent(new CustomEvent('pais_arrasado', {
+                                    detail: { pais: strId }
                                 }));
                             }
                         }
