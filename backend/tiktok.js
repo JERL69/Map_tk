@@ -3,6 +3,27 @@ const gameEngine = require('./gameEngine');
 const config = require('./config');
 const GiftQueue = require('./giftQueue');
 
+// TikTok manda los nombres de regalo en inglés y con apóstrofes tipográficos
+// ("You’re amazing"), así que se normaliza todo antes de comparar: minúsculas,
+// sin acentos, apóstrofes unificados y espacios colapsados.
+function normalizarNombre(txt) {
+    return String(txt || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\u2018\u2019\u02bc\u00b4\u0060]/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Índice construido una sola vez: nombre normalizado -> clave del catálogo
+const indiceRegalos = {};
+for (const clave of Object.keys(config.gifts)) {
+    indiceRegalos[normalizarNombre(clave)] = clave;
+    (config.gifts[clave].aliases || []).forEach(function (a) {
+        indiceRegalos[normalizarNombre(a)] = clave;
+    });
+}
+
 // ================= EVENTO AMBIENTAL DE MAPA =================
 // Evento puramente decorativo: NO multiplica el valor de ningún regalo,
 // no lleva cuenta regresiva y no depende de las donaciones. Solo mantiene
@@ -46,23 +67,41 @@ function connectToTikTokUser(tiktokUsername, io) {
         }
     });
 
+    // El .catch de connect() y el evento 'disconnected' podían programar dos
+    // reintentos a la vez; en la v2 del conector eso lanza AlreadyConnecting y la
+    // conexión se quedaba atascada. Ahora solo puede haber un reintento en curso.
+    let conectando = false;
+    let reintentoPendiente = null;
+
+    function programarReintento() {
+        if (reintentoPendiente) return;
+        reintentoPendiente = setTimeout(() => {
+            reintentoPendiente = null;
+            connect();
+        }, 10000);
+    }
+
     function connect() {
+        if (conectando) return;
+        conectando = true;
         tiktokLiveConnection.connect().then(state => {
+            conectando = false;
             console.info(`Conectado al stream de TikTok Live: ${state.roomId}`);
             io.emit('tiktok_feed', `🟢 Conectado al LIVE de @${tiktokUsername}`);
         }).catch(err => {
-            console.error(`Error conectando a TikTok Live de ${tiktokUsername}`, err);
-            // Reintentar en 10 segundos
-            setTimeout(connect, 10000);
+            conectando = false;
+            console.error(`Error conectando a TikTok Live de ${tiktokUsername}:`,
+                          err && err.message ? err.message : err);
+            programarReintento();
         });
     }
 
     connect();
 
     tiktokLiveConnection.on('disconnected', () => {
-        console.log(`Desconectado del LIVE de ${tiktokUsername}. Reconectando...`);
+        console.log(`Desconectado del LIVE de ${tiktokUsername}. Reintentando...`);
         io.emit('tiktok_feed', `🔴 Desconectado. Reintentando conexión...`);
-        setTimeout(connect, 10000);
+        programarReintento();
     });
 
     tiktokLiveConnection.on('error', err => {
@@ -78,59 +117,62 @@ function connectToTikTokUser(tiktokUsername, io) {
         
         console.log(`[${tiktokUsername}] Regalo recibido: ${multiplicador}x ${giftName} de ${nickname}`);
         
-        // Búsqueda insensible a mayúsculas/minúsculas, incluyendo alias en inglés
-        const giftNameLower = giftName.toLowerCase();
-        const giftKey = Object.keys(config.gifts).find(k => {
-            const isMatch = k.toLowerCase() === giftNameLower;
-            const hasAlias = config.gifts[k].aliases && config.gifts[k].aliases.includes(giftNameLower);
-            return isMatch || hasAlias;
-        });
+        const giftKey = indiceRegalos[normalizarNombre(giftName)] || null;
         const infoRegalo = giftKey ? config.gifts[giftKey] : null;
-        
-        if (infoRegalo) {
-            if (infoRegalo.tipo === "apocalipsis") {
-                console.log(`[!] Evento especial activado por ${nickname} con ${giftName}`);
-                // Emitimos lluvia de bombas con 10 bombas por defecto
-                io.emit('lluvia_de_bombas', { usuario: nickname, regalo: giftName, cantidad: 10 });
-                return;
-            }
 
-            const paisRegalo = infoRegalo.pais;
-            
-            const fuerzaBase = infoRegalo.fuerza;
+        // Antes un regalo sin asignar se descartaba sin dejar rastro, lo que hacía
+        // imposible diagnosticar por qué el mapa no se movía. Ahora cada motivo de
+        // descarte queda escrito en el log.
+        if (!infoRegalo) {
+            console.warn(`[REGALO SIN ASIGNAR] "${giftName}" no figura en config.gifts. ` +
+                         `Agrégalo como alias del país que corresponda para que mueva el mapa.`);
+            return;
+        }
 
-            const realAtacanteId = gameEngine.getOwnerReal(paisRegalo);
-            const estadoActual = gameEngine.getEstadoActual();
-            const paisAtacante = estadoActual[realAtacanteId];
+        if (infoRegalo.tipo === "apocalipsis") {
+            console.log(`[!] Evento especial activado por ${nickname} con ${giftName}`);
+            io.emit('lluvia_de_bombas', { usuario: nickname, regalo: giftName, cantidad: 10 });
+            return;
+        }
 
-            if (paisAtacante && !paisAtacante.eliminado) {
-                const vecinos = paisAtacante.vecinos;
+        const paisRegalo = infoRegalo.pais;
+        const fuerzaBase = infoRegalo.fuerza;
 
-                if (vecinos.length > 0) {
-                    // Daño completo y un solo objetivo: nunca se reparte entre varios.
-                    const porcentajeInvasion = fuerzaBase / 100;
+        const realAtacanteId = gameEngine.getOwnerReal(paisRegalo);
+        const estadoActual = gameEngine.getEstadoActual();
+        const paisAtacante = estadoActual[realAtacanteId];
 
-                    // El defensor definitivo lo elige el grid del cliente (el vecino
-                    // que más territorio original del atacante tenga). Esto es solo
-                    // un respaldo por si el grid aún no está listo.
-                    const respaldo = vecinos[Math.floor(Math.random() * vecinos.length)];
+        if (!paisAtacante || paisAtacante.eliminado) {
+            console.warn(`[REGALO PERDIDO] "${giftName}" apunta a ${paisRegalo} ` +
+                         `(dueño real: ${realAtacanteId}), que no está disponible.`);
+            return;
+        }
 
-                    // Un ataque por cada regalo del combo: 20 rosas = 20 empujones.
-                    for (let i = 0; i < multiplicador; i++) {
-                        queueManager.addEvent({
-                            atacante: realAtacanteId,
-                            defensor: respaldo,
-                            vecinos: vecinos,
-                            porcentaje: porcentajeInvasion,
-                            usuario: nickname,
-                            regalo: giftName,
-                            multiplicador: i === 0 ? multiplicador : 1, // El primero muestra el combo total (ej. x20)
-                            ocultarAlerta: i > 0, // Solo mostrar el popup gigante en el primer golpe
-                            nombrePais: paisAtacante.nombre
-                        });
-                    }
-                }
-            }
+        const vecinos = paisAtacante.vecinos;
+        if (vecinos.length === 0) {
+            console.warn(`[REGALO PERDIDO] ${paisAtacante.nombre} no tiene vecinos vivos.`);
+            return;
+        }
+
+        const porcentajeInvasion = fuerzaBase / 100;
+        // Respaldo por si el grid del cliente todavía no puede elegir objetivo
+        const respaldo = vecinos[Math.floor(Math.random() * vecinos.length)];
+
+        console.log(`  -> ${paisAtacante.nombre} empuja el mapa (x${multiplicador})`);
+
+        // Un ataque por cada regalo del combo: 20 rosas = 20 empujones.
+        for (let i = 0; i < multiplicador; i++) {
+            queueManager.addEvent({
+                atacante: realAtacanteId,
+                defensor: respaldo,
+                vecinos: vecinos,
+                porcentaje: porcentajeInvasion,
+                usuario: nickname,
+                regalo: giftName,
+                multiplicador: i === 0 ? multiplicador : 1, // El primero muestra el combo total
+                ocultarAlerta: i > 0, // Solo el primer golpe muestra el popup gigante
+                nombrePais: paisAtacante.nombre
+            });
         }
     });
 
