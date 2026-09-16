@@ -9,11 +9,20 @@ const socket = io(backendUrl, { transports: ['websocket', 'polling'] });
 const urlParams = new URLSearchParams(window.location.search);
 const tiktokUser = urlParams.get('user');
 
-if (tiktokUser) {
-    socket.emit('iniciar_stream', tiktokUser);
-} else {
+if (!tiktokUser) {
     alert("¡Atención! Para conectar a TikTok Live, debes añadir tu usuario a la URL. Ejemplo: tuyo.com/?user=MiUsuario");
 }
+
+// Se pide el stream en CADA conexión, no solo al cargar la página. Si el backend
+// se reinicia (un redespliegue, por ejemplo), Socket.IO reconecta solo pero el
+// servidor ya no tiene el stream: sin este reenvío el overlay se queda mudo para
+// siempre, sin avisar, en mitad de una transmisión.
+socket.on('connect', () => {
+    if (tiktokUser) {
+        console.log('Conectado al backend. Solicitando stream de', tiktokUser);
+        socket.emit('iniciar_stream', tiktokUser);
+    }
+});
 
 let estadoGlobal = {};
 
