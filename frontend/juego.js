@@ -128,7 +128,11 @@ socket.on('attack', (data) => {
     // se prioriza al vecino que retenga territorio original del atacante.
     let defensor = data.defensor;
     if (window.gridManager && window.gridManager.numCells > 0 && data.vecinos) {
-        defensor = window.gridManager.elegirObjetivo(atacante, data.vecinos) || defensor;
+        const elegido = window.gridManager.elegirObjetivo(atacante, data.vecinos);
+        // Ningún vecino conserva territorio: no hay nada que atacar. Se corta aquí
+        // para no disparar alertas ni mover la cámara sobre países inexistentes.
+        if (!elegido) return;
+        defensor = elegido;
     }
 
     const atacanteObj = estadoGlobal[atacante];

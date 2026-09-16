@@ -310,39 +310,43 @@ class GridManager {
         return cuantas;
     }
 
-    // Elige contra quién empuja un país. Si algún vecino le tiene territorio
-    // original, ataca al que más le tenga (recuperación). Si no perdió nada,
-    // se expande contra un vecino al azar.
+    // Elige contra quién empuja un país. Prioriza recuperar: ataca al vecino que
+    // más territorio original suyo retenga. Si no perdió nada, se expande al azar.
+    // Solo se consideran vecinos que HOY tienen celdas en el mapa: un país
+    // arrasado sigue vivo para poder resurgir, pero no se le puede atacar. Sin
+    // ese filtro se lanzaban ataques fantasma contra países que ya no existen
+    // físicamente: no cambiaba nada del territorio, pero la alerta saltaba y la
+    // cámara hacía zoom, así que el mapa parecía moverse solo.
     elegirObjetivo(atacanteStr, vecinos) {
         if (!vecinos || vecinos.length === 0) return null;
-        const alAzar = () => vecinos[Math.floor(Math.random() * vecinos.length)];
 
         const atacanteId = this.paisStrToInt[atacanteStr];
-        if (!atacanteId || !this.originalOwnerGrid) return alAzar();
+        const territorio = {}; // celdas que posee hoy cada vecino
+        const robadas = {};    // celdas originales del atacante que retiene cada vecino
 
-        // Cuántas celdas originales del atacante retiene hoy cada vecino
-        const robadas = {};
         for (let v = 0; v < vecinos.length; v++) {
             const vid = this.paisStrToInt[vecinos[v]];
-            if (vid) robadas[vid] = 0;
+            if (vid) { territorio[vid] = 0; robadas[vid] = 0; }
         }
 
+        // Una sola pasada por el grid resuelve ambas cuentas
         for (let i = 0; i < this.numCells; i++) {
-            if (this.originalOwnerGrid[i] === atacanteId) {
-                const actual = this.ownerGrid[i];
-                if (actual !== atacanteId && robadas[actual] !== undefined) robadas[actual]++;
-            }
+            const duenoActual = this.ownerGrid[i];
+            if (territorio[duenoActual] === undefined) continue;
+            territorio[duenoActual]++;
+            if (atacanteId && this.originalOwnerGrid[i] === atacanteId) robadas[duenoActual]++;
         }
+
+        const validos = Object.keys(territorio).filter(id => territorio[id] > 0);
+        if (validos.length === 0) return null; // no queda nadie a quien atacar
 
         let mejor = null, max = 0;
-        for (const vid in robadas) {
-            if (robadas[vid] > max) {
-                max = robadas[vid];
-                mejor = this.paisIntToStr[vid];
-            }
+        for (const id of validos) {
+            if (robadas[id] > max) { max = robadas[id]; mejor = this.paisIntToStr[id]; }
         }
+        if (mejor) return mejor;
 
-        return mejor || alAzar();
+        return this.paisIntToStr[validos[Math.floor(Math.random() * validos.length)]];
     }
 
     iniciarInfeccion(atacanteStr, defensorStr, porcentaje = 0.05) {
