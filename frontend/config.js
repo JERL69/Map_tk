@@ -1,7 +1,8 @@
 // Archivo de configuración global (Frontend)
+// En localhost se usa el mismo origen (el backend sirve también el frontend),
+// así se puede probar todo en el PC sin depender del despliegue remoto.
+const esLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+
 window.CONFIG = {
-    // Si usas Vercel + Railway, pega aquí la URL de tu backend en Railway
-    // Ej: "https://mi-backend-railway.up.railway.app"
-    // Si lo dejas vacío "", intentará usar la misma URL (para entorno monolítico local)
-    BACKEND_URL: "https://maptk-production.up.railway.app"
+    BACKEND_URL: esLocal ? "" : "https://maptk-production.up.railway.app"
 };

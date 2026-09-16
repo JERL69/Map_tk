@@ -16,10 +16,10 @@ module.exports = {
         "GG":             { pais: "venezuela",   fuerza: 5, aliases: ["gg"] },
         "Maracas":        { pais: "chile",       fuerza: 5, aliases: ["maracas"] },
         "Clásicos":       { pais: "paraguay",    fuerza: 5, aliases: ["classic", "classics", "classical", "radio"] },
-        "Eres increíble": { pais: "ecuador",     fuerza: 5, aliases: ["you're amazing", "amazing"] },
+        "Eres increíble": { pais: "ecuador",     fuerza: 5, aliases: ["you're amazing", "amazing", "you're awesome", "awesome"] },
         "Pop":            { pais: "uruguay",     fuerza: 5, aliases: ["pop"] },
         "Corazoncito":    { pais: "el_salvador", fuerza: 5, aliases: ["heart", "heart me", "finger heart", "little heart"] },
-        "Te adoro":       { pais: "costa_rica",  fuerza: 5, aliases: ["love you", "i love you", "adore you"] },
+        "Te adoro":       { pais: "costa_rica",  fuerza: 5, aliases: ["love you", "i love you", "love you so much", "adore you"] },
         "It's corn":      { pais: "panama",      fuerza: 5, aliases: ["it's corn", "corn"] },
 
         // ================================================
