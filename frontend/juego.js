@@ -495,6 +495,40 @@ if (btnToggleLegend && legendBody) {
     }
 }
 
+// ================= MODO DE PRUEBA (?test=1) =================
+// Permite ensayar el overlay sin que nadie esté transmitiendo. No dibuja nada en
+// pantalla: son solo atajos de teclado, para no robarle sitio al mapa.
+if (urlParams.get('test') === '1') {
+    const REGALOS_PRUEBA = ['Rose', 'White Rose', 'Heart Me', 'GG', 'Maracas', 'Pop',
+                            'Ice Cream Cone', 'Cake Slice', 'TikTok', 'Corn',
+                            "You're awesome", 'Love you so much', 'Wink Wink', 'Classical'];
+    let autoPrueba = null;
+
+    const enviarRegaloPrueba = () => {
+        const regalo = REGALOS_PRUEBA[Math.floor(Math.random() * REGALOS_PRUEBA.length)];
+        const cantidad = Math.random() < 0.25 ? Math.ceil(Math.random() * 8) : 1;
+        socket.emit('simular_regalo', { regalo, cantidad });
+    };
+
+    console.log('%c MODO DE PRUEBA ACTIVO ', 'background:#ff0050;color:#fff;font-weight:bold');
+    console.log('  G = un regalo al azar   |   A = lluvia automática on/off   |   B = evento especial');
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'g' || e.key === 'G') enviarRegaloPrueba();
+        if (e.key === 'b' || e.key === 'B') socket.emit('simular_regalo', { regalo: 'Galaxy' });
+        if (e.key === 'a' || e.key === 'A') {
+            if (autoPrueba) {
+                clearInterval(autoPrueba);
+                autoPrueba = null;
+                console.log('Lluvia automática detenida.');
+            } else {
+                autoPrueba = setInterval(enviarRegaloPrueba, 1200);
+                console.log('Lluvia automática iniciada (un regalo cada 1,2 s).');
+            }
+        }
+    });
+}
+
 // ================= ATAJOS DE TECLADO =================
 document.addEventListener('keydown', (e) => {
     // Si presionas Shift + R, se reinicia el juego

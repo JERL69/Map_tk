@@ -46,6 +46,70 @@ function iniciarCicloEventoMapa(io) {
 }
 // ============================================================
 
+// Convierte un regalo en ataques sobre el mapa. Se usa tanto para los regalos
+// reales de TikTok como para los simulados del modo de prueba, para que ambos
+// recorran exactamente el mismo camino.
+function procesarRegalo(io, queueManager, giftName, nickname, multiplicador, etiqueta) {
+    const giftKey = indiceRegalos[normalizarNombre(giftName)] || null;
+    const infoRegalo = giftKey ? config.gifts[giftKey] : null;
+
+    // Antes un regalo sin asignar se descartaba sin dejar rastro, lo que hacía
+    // imposible diagnosticar por qué el mapa no se movía. Ahora cada motivo de
+    // descarte queda escrito en el log.
+    if (!infoRegalo) {
+        console.warn(`[REGALO SIN ASIGNAR] "${giftName}" no figura en config.gifts. ` +
+                     `Agrégalo como alias del país que corresponda para que mueva el mapa.`);
+        return;
+    }
+
+    if (infoRegalo.tipo === "apocalipsis") {
+        console.log(`[!] Evento especial activado por ${nickname} con ${giftName}`);
+        io.emit('lluvia_de_bombas', { usuario: nickname, regalo: giftName, cantidad: 10 });
+        return;
+    }
+
+    const paisRegalo = infoRegalo.pais;
+    const fuerzaBase = infoRegalo.fuerza;
+
+    const realAtacanteId = gameEngine.getOwnerReal(paisRegalo);
+    const estadoActual = gameEngine.getEstadoActual();
+    const paisAtacante = estadoActual[realAtacanteId];
+
+    if (!paisAtacante || paisAtacante.eliminado) {
+        console.warn(`[REGALO PERDIDO] "${giftName}" apunta a ${paisRegalo} ` +
+                     `(dueño real: ${realAtacanteId}), que no está disponible.`);
+        return;
+    }
+
+    const vecinos = paisAtacante.vecinos;
+    if (vecinos.length === 0) {
+        console.warn(`[REGALO PERDIDO] ${paisAtacante.nombre} no tiene vecinos vivos.`);
+        return;
+    }
+
+    const porcentajeInvasion = fuerzaBase / 100;
+    // Respaldo por si el grid del cliente todavía no puede elegir objetivo
+    const respaldo = vecinos[Math.floor(Math.random() * vecinos.length)];
+
+    console.log(`  -> ${paisAtacante.nombre} empuja el mapa (x${multiplicador})${etiqueta || ''}`);
+
+    // Un ataque por cada regalo del combo: 20 rosas = 20 empujones.
+    for (let i = 0; i < multiplicador; i++) {
+        queueManager.addEvent({
+            atacante: realAtacanteId,
+            defensor: respaldo,
+            vecinos: vecinos,
+            porcentaje: porcentajeInvasion,
+            usuario: nickname,
+            regalo: giftName,
+            multiplicador: i === 0 ? multiplicador : 1, // El primero muestra el combo total
+            ocultarAlerta: i > 0, // Solo el primer golpe muestra el popup gigante
+            nombrePais: paisAtacante.nombre
+        });
+    }
+}
+
+
 function connectToTikTokUser(tiktokUsername, io) {
     console.log(`Iniciando conexión con TikTok Live para @${tiktokUsername}...`);
     
@@ -131,63 +195,7 @@ function connectToTikTokUser(tiktokUsername, io) {
         
         console.log(`[${tiktokUsername}] Regalo recibido: ${multiplicador}x ${giftName} de ${nickname}`);
         
-        const giftKey = indiceRegalos[normalizarNombre(giftName)] || null;
-        const infoRegalo = giftKey ? config.gifts[giftKey] : null;
-
-        // Antes un regalo sin asignar se descartaba sin dejar rastro, lo que hacía
-        // imposible diagnosticar por qué el mapa no se movía. Ahora cada motivo de
-        // descarte queda escrito en el log.
-        if (!infoRegalo) {
-            console.warn(`[REGALO SIN ASIGNAR] "${giftName}" no figura en config.gifts. ` +
-                         `Agrégalo como alias del país que corresponda para que mueva el mapa.`);
-            return;
-        }
-
-        if (infoRegalo.tipo === "apocalipsis") {
-            console.log(`[!] Evento especial activado por ${nickname} con ${giftName}`);
-            io.emit('lluvia_de_bombas', { usuario: nickname, regalo: giftName, cantidad: 10 });
-            return;
-        }
-
-        const paisRegalo = infoRegalo.pais;
-        const fuerzaBase = infoRegalo.fuerza;
-
-        const realAtacanteId = gameEngine.getOwnerReal(paisRegalo);
-        const estadoActual = gameEngine.getEstadoActual();
-        const paisAtacante = estadoActual[realAtacanteId];
-
-        if (!paisAtacante || paisAtacante.eliminado) {
-            console.warn(`[REGALO PERDIDO] "${giftName}" apunta a ${paisRegalo} ` +
-                         `(dueño real: ${realAtacanteId}), que no está disponible.`);
-            return;
-        }
-
-        const vecinos = paisAtacante.vecinos;
-        if (vecinos.length === 0) {
-            console.warn(`[REGALO PERDIDO] ${paisAtacante.nombre} no tiene vecinos vivos.`);
-            return;
-        }
-
-        const porcentajeInvasion = fuerzaBase / 100;
-        // Respaldo por si el grid del cliente todavía no puede elegir objetivo
-        const respaldo = vecinos[Math.floor(Math.random() * vecinos.length)];
-
-        console.log(`  -> ${paisAtacante.nombre} empuja el mapa (x${multiplicador})`);
-
-        // Un ataque por cada regalo del combo: 20 rosas = 20 empujones.
-        for (let i = 0; i < multiplicador; i++) {
-            queueManager.addEvent({
-                atacante: realAtacanteId,
-                defensor: respaldo,
-                vecinos: vecinos,
-                porcentaje: porcentajeInvasion,
-                usuario: nickname,
-                regalo: giftName,
-                multiplicador: i === 0 ? multiplicador : 1, // El primero muestra el combo total
-                ocultarAlerta: i > 0, // Solo el primer golpe muestra el popup gigante
-                nombrePais: paisAtacante.nombre
-            });
-        }
+        procesarRegalo(io, queueManager, giftName, nickname, multiplicador);
     });
 
     tiktokLiveConnection.on('like', data => {
@@ -198,3 +206,4 @@ function connectToTikTokUser(tiktokUsername, io) {
 }
 
 module.exports = connectToTikTokUser;
+module.exports.procesarRegalo = procesarRegalo;

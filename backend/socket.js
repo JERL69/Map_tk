@@ -1,6 +1,8 @@
 const { Server } = require('socket.io');
 const gameEngine = require('./gameEngine');
 const connectToTikTokUser = require('./tiktok');
+const { procesarRegalo } = require('./tiktok');
+const GiftQueue = require('./giftQueue');
 
 function setupSocket(server) {
     const io = new Server(server, {
@@ -16,6 +18,9 @@ function setupSocket(server) {
 
     // Evita disparar dos finales si llegan varios reportes de victoria juntos
     let finalEnCurso = false;
+
+    // Cola propia para los regalos simulados del modo de prueba
+    const colaPruebas = new GiftQueue(io);
 
     io.on('connection', (socket) => {
         console.log('Un cliente se ha conectado:', socket.id);
@@ -124,6 +129,17 @@ function setupSocket(server) {
                 io.emit('juego_reiniciado');
                 finalEnCurso = false;
             }, 12000);
+        });
+
+        // Modo de prueba: inyecta un regalo como si viniera de TikTok, para poder
+        // ensayar el overlay (posición de la leyenda, animaciones, conquistas) sin
+        // depender de que alguien esté transmitiendo. Recorre exactamente el mismo
+        // camino que un regalo real.
+        socket.on('simular_regalo', (data) => {
+            const nombre = (data && data.regalo) || 'Rose';
+            const veces = Math.max(1, Math.min(50, (data && data.cantidad) || 1));
+            console.log(`[PRUEBA] Regalo simulado: ${veces}x ${nombre}`);
+            procesarRegalo(io, colaPruebas, nombre, 'PRUEBA', veces, '  [simulado]');
         });
 
         socket.on('reset_juego', () => {
