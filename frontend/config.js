@@ -4,5 +4,5 @@
 const esLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
 
 window.CONFIG = {
-    BACKEND_URL: esLocal ? "" : "https://maptk-production.up.railway.app"
+    BACKEND_URL: esLocal ? "" : "https://map-tk.onrender.com"
 };
