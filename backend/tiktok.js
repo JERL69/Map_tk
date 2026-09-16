@@ -73,6 +73,11 @@ function connectToTikTokUser(tiktokUsername, io) {
     let conectando = false;
     let reintentoPendiente = null;
 
+    // Estado real de la conexión, para que socket.js pueda distinguir una
+    // conexión viva de una zombi que nunca llegó a establecerse.
+    tiktokLiveConnection.__conectado = false;
+    tiktokLiveConnection.__creado = Date.now();
+
     function programarReintento() {
         if (reintentoPendiente) return;
         reintentoPendiente = setTimeout(() => {
@@ -86,12 +91,20 @@ function connectToTikTokUser(tiktokUsername, io) {
         conectando = true;
         tiktokLiveConnection.connect().then(state => {
             conectando = false;
+            tiktokLiveConnection.__conectado = true;
             console.info(`Conectado al stream de TikTok Live: ${state.roomId}`);
             io.emit('tiktok_feed', `🟢 Conectado al LIVE de @${tiktokUsername}`);
         }).catch(err => {
             conectando = false;
-            console.error(`Error conectando a TikTok Live de ${tiktokUsername}:`,
-                          err && err.message ? err.message : err);
+            tiktokLiveConnection.__conectado = false;
+            const motivo = err && err.message ? err.message : err;
+            // Que el usuario aún no haya iniciado su live es lo normal mientras se
+            // espera, así que se registra como una línea limpia y no como un error.
+            if (/isn't online|not online|offline/i.test(String(motivo))) {
+                console.log(`Esperando a que @${tiktokUsername} inicie su live...`);
+            } else {
+                console.error(`Error conectando a TikTok Live de ${tiktokUsername}:`, motivo);
+            }
             programarReintento();
         });
     }
@@ -99,6 +112,7 @@ function connectToTikTokUser(tiktokUsername, io) {
     connect();
 
     tiktokLiveConnection.on('disconnected', () => {
+        tiktokLiveConnection.__conectado = false;
         console.log(`Desconectado del LIVE de ${tiktokUsername}. Reintentando...`);
         io.emit('tiktok_feed', `🔴 Desconectado. Reintentando conexión...`);
         programarReintento();

@@ -30,17 +30,32 @@ function setupSocket(server) {
             username = username.toLowerCase().replace('@', '');
             console.log(`Solicitud para iniciar stream de: ${username}`);
 
-            // Si el stream ya está activo globalmente, no crear otro
-            if (!activeStreams.has(username)) {
-                console.log(`Conectando nuevo stream para ${username}...`);
-                const tiktokConnection = connectToTikTokUser(username, io);
-                activeStreams.set(username, tiktokConnection);
+            const existente = activeStreams.get(username);
 
-                // Limpiar del mapa si se desconecta permanentemente (lo maneja tiktok.js, 
-                // pero por ahora lo dejamos en el mapa como activo).
-            } else {
-                console.log(`El stream de ${username} ya está siendo trackeado.`);
+            if (existente) {
+                const vivo = existente.__conectado === true;
+                // Margen para que una conexión recién creada termine de establecerse
+                // sin que otro cliente la tumbe a mitad del intento.
+                const reciente = (Date.now() - (existente.__creado || 0)) < 30000;
+
+                if (vivo || reciente) {
+                    console.log(`El stream de ${username} ya está ${vivo ? 'conectado' : 'conectando'}.`);
+                    return;
+                }
+
+                // Conexión zombi: se registró pero nunca llegó a conectarse (por
+                // ejemplo, se pidió antes de que el usuario iniciara su live). Si no
+                // se descarta, bloquea para siempre cualquier intento nuevo y hay
+                // que reiniciar el servidor a mano.
+                console.log(`Descartando conexión muerta de ${username} y reintentando...`);
+                try {
+                    if (typeof existente.disconnect === 'function') existente.disconnect();
+                } catch (e) { /* ya estaba rota */ }
+                activeStreams.delete(username);
             }
+
+            console.log(`Conectando nuevo stream para ${username}...`);
+            activeStreams.set(username, connectToTikTokUser(username, io));
         });
 
         // Evento de prueba desde el cliente
