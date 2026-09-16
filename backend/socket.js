@@ -4,6 +4,24 @@ const connectToTikTokUser = require('./tiktok');
 const { procesarRegalo } = require('./tiktok');
 const GiftQueue = require('./giftQueue');
 
+// Conexiones activas con TikTok, una por usuario
+const activeStreams = new Map();
+
+// Resumen legible del estado de cada conexión, para la página /estado
+function obtenerEstadoStreams() {
+    const hace = (t) => t ? Math.round((Date.now() - t) / 1000) + ' s' : null;
+    return Array.from(activeStreams.values()).map(c => ({
+        usuario: c.__usuario,
+        conectado: c.__conectado === true,
+        sala: c.__roomId,
+        conectadoHace: hace(c.__conectadoDesde),
+        eventosRecibidos: c.__eventos,
+        ultimoEventoHace: hace(c.__ultimoEvento),
+        ultimoError: c.__ultimoError,
+        ultimosRegalos: c.__regalosCrudos
+    }));
+}
+
 function setupSocket(server) {
     const io = new Server(server, {
         cors: {
@@ -13,8 +31,6 @@ function setupSocket(server) {
         }
     });
 
-    // Mapa de conexiones activas para evitar duplicados en producción
-    const activeStreams = new Map();
 
     // Evita disparar dos finales si llegan varios reportes de victoria juntos
     let finalEnCurso = false;
@@ -157,4 +173,5 @@ function setupSocket(server) {
 }
 
 module.exports = setupSocket;
+module.exports.obtenerEstadoStreams = obtenerEstadoStreams;
 

@@ -112,7 +112,7 @@ function procesarRegalo(io, queueManager, giftName, nickname, multiplicador, eti
 
 function connectToTikTokUser(tiktokUsername, io) {
     console.log(`Iniciando conexión con TikTok Live para @${tiktokUsername}...`);
-    
+
     const queueManager = new GiftQueue(io);
 
     // El ciclo ambiental corre una sola vez por proceso, desligado de las donaciones
@@ -120,8 +120,8 @@ function connectToTikTokUser(tiktokUsername, io) {
         cicloEventoIniciado = true;
         iniciarCicloEventoMapa(io);
     }
-    
-    let tiktokLiveConnection = new WebcastPushConnection(tiktokUsername, {
+
+    const tiktokLiveConnection = new WebcastPushConnection(tiktokUsername, {
         processInitialData: false,
         enableExtendedGiftInfo: true,
         enableWebsocketUpgrade: true,
@@ -131,16 +131,27 @@ function connectToTikTokUser(tiktokUsername, io) {
         }
     });
 
-    // El .catch de connect() y el evento 'disconnected' podían programar dos
-    // reintentos a la vez; en la v2 del conector eso lanza AlreadyConnecting y la
-    // conexión se quedaba atascada. Ahora solo puede haber un reintento en curso.
-    let conectando = false;
-    let reintentoPendiente = null;
-
-    // Estado real de la conexión, para que socket.js pueda distinguir una
-    // conexión viva de una zombi que nunca llegó a establecerse.
+    // Estado observable desde fuera (socket.js y la página /estado)
+    tiktokLiveConnection.__usuario = tiktokUsername;
     tiktokLiveConnection.__conectado = false;
     tiktokLiveConnection.__creado = Date.now();
+    tiktokLiveConnection.__roomId = null;
+    tiktokLiveConnection.__conectadoDesde = null;
+    tiktokLiveConnection.__eventos = 0;
+    tiktokLiveConnection.__ultimoEvento = null;
+    tiktokLiveConnection.__ultimoError = null;
+    tiktokLiveConnection.__regalosCrudos = [];
+
+    const registrarEvento = () => {
+        tiktokLiveConnection.__eventos++;
+        tiktokLiveConnection.__ultimoEvento = Date.now();
+    };
+
+    // El .catch de connect() y el evento 'disconnected' podían programar dos
+    // reintentos a la vez; en la v2 del conector eso lanza AlreadyConnecting y la
+    // conexión se quedaba atascada. Solo puede haber un reintento en curso.
+    let conectando = false;
+    let reintentoPendiente = null;
 
     function programarReintento() {
         if (reintentoPendiente) return;
@@ -156,21 +167,37 @@ function connectToTikTokUser(tiktokUsername, io) {
         tiktokLiveConnection.connect().then(state => {
             conectando = false;
             tiktokLiveConnection.__conectado = true;
+            tiktokLiveConnection.__roomId = String(state.roomId);
+            tiktokLiveConnection.__conectadoDesde = Date.now();
+            tiktokLiveConnection.__ultimoError = null;
             console.info(`Conectado al stream de TikTok Live: ${state.roomId}`);
             io.emit('tiktok_feed', `🟢 Conectado al LIVE de @${tiktokUsername}`);
         }).catch(err => {
             conectando = false;
             tiktokLiveConnection.__conectado = false;
-            const motivo = err && err.message ? err.message : err;
+            const motivo = err && err.message ? err.message : String(err);
+            tiktokLiveConnection.__ultimoError = motivo;
             // Que el usuario aún no haya iniciado su live es lo normal mientras se
             // espera, así que se registra como una línea limpia y no como un error.
-            if (/isn't online|not online|offline/i.test(String(motivo))) {
+            if (/isn't online|not online|offline/i.test(motivo)) {
                 console.log(`Esperando a que @${tiktokUsername} inicie su live...`);
             } else {
                 console.error(`Error conectando a TikTok Live de ${tiktokUsername}:`, motivo);
             }
             programarReintento();
         });
+    }
+
+    // Suelta la conexión actual y vuelve a conectar desde cero. Al desconectarse,
+    // la librería borra la sala guardada, así que el nuevo intento busca la sala
+    // del live vigente.
+    function reconectarDesdeCero(motivo) {
+        console.log(`[${tiktokUsername}] ${motivo} Reconectando desde cero...`);
+        tiktokLiveConnection.__conectado = false;
+        Promise.resolve()
+            .then(() => tiktokLiveConnection.disconnect())
+            .catch(() => { /* ya estaba cerrada */ })
+            .then(() => programarReintento());
     }
 
     connect();
@@ -182,25 +209,64 @@ function connectToTikTokUser(tiktokUsername, io) {
         programarReintento();
     });
 
-    tiktokLiveConnection.on('error', err => {
-        console.error('Error en conexión TikTok:', err);
+    // El live terminó: se suelta la sala para no quedarse escuchando una muerta
+    tiktokLiveConnection.on('streamEnd', () => {
+        reconectarDesdeCero('El live terminó.');
     });
 
+    tiktokLiveConnection.on('error', err => {
+        console.error('Error en conexión TikTok:', err && err.info ? err.info : err);
+    });
+
+    // Vigilante de sala: si el live se cerró de golpe y se abrió otro, TikTok no
+    // siempre avisa, y la conexión se queda "conectada" a la sala vieja sin recibir
+    // nada. Cada minuto se compara con la sala vigente del usuario.
+    const vigilanteSala = setInterval(async () => {
+        if (!tiktokLiveConnection.__conectado || conectando) return;
+        try {
+            const salaActual = String(await tiktokLiveConnection.fetchRoomId());
+            if (salaActual && tiktokLiveConnection.__roomId && salaActual !== tiktokLiveConnection.__roomId) {
+                reconectarDesdeCero(`Sala vieja ${tiktokLiveConnection.__roomId}, el live vigente es ${salaActual}.`);
+            }
+        } catch (e) {
+            // No se pudo consultar la sala: se reintenta en el siguiente minuto
+        }
+    }, 60000);
+    if (vigilanteSala.unref) vigilanteSala.unref();
+
     tiktokLiveConnection.on('gift', data => {
+        registrarEvento();
+
+        // Registro crudo ANTES de cualquier filtro, para poder ver en /estado que
+        // el regalo llegó aunque luego se descarte (por ejemplo, a mitad de racha).
+        tiktokLiveConnection.__regalosCrudos.unshift({
+            hora: new Date().toISOString(),
+            regalo: data.giftName,
+            usuario: data.nickname,
+            cantidad: data.repeatCount,
+            tipo: data.giftType,
+            finDeRacha: data.repeatEnd
+        });
+        tiktokLiveConnection.__regalosCrudos.length = Math.min(tiktokLiveConnection.__regalosCrudos.length, 15);
+
         if (data.giftType === 1 && !data.repeatEnd) return;
 
         const giftName = data.giftName;
         const nickname = data.nickname;
         const multiplicador = data.repeatCount ? data.repeatCount : 1;
-        
+
         console.log(`[${tiktokUsername}] Regalo recibido: ${multiplicador}x ${giftName} de ${nickname}`);
-        
+
         procesarRegalo(io, queueManager, giftName, nickname, multiplicador);
     });
 
     tiktokLiveConnection.on('like', data => {
+        registrarEvento();
         io.emit('tiktok_feed', `❤️ ${data.nickname} dio like al stream`);
     });
+    tiktokLiveConnection.on('member', registrarEvento);
+    tiktokLiveConnection.on('chat', registrarEvento);
+    tiktokLiveConnection.on('social', registrarEvento);
 
     return tiktokLiveConnection;
 }
