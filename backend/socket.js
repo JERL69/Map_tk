@@ -86,6 +86,31 @@ function setupSocket(server) {
             }
         });
 
+        // El cliente es quien ve el territorio real (el grid), así que es quien
+        // detecta que un solo país conserva celdas en todo el mapa.
+        socket.on('reportar_dominio_total', (data) => {
+            if (finalEnCurso || !data || !data.ganador) return;
+
+            const ganador = gameEngine.declararDominioTotal(data.ganador);
+            if (!ganador) return;
+
+            finalEnCurso = true;
+            console.log(`[JUEGO] ${ganador.nombre} domina todo el mapa. Reinicio en 12s.`);
+
+            io.emit('conquista_realizada', {
+                atacante: ganador.id,
+                defensor: ganador.id,
+                nuevoEstado: gameEngine.getEstadoActual()
+            });
+            io.emit('juego_terminado', { id: ganador.id, nombre: ganador.nombre });
+
+            setTimeout(() => {
+                io.emit('estado_inicial', gameEngine.reiniciarEstado());
+                io.emit('juego_reiniciado');
+                finalEnCurso = false;
+            }, 12000);
+        });
+
         socket.on('reset_juego', () => {
             const nuevoEstado = gameEngine.reiniciarEstado();
             io.emit('estado_inicial', nuevoEstado);

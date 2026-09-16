@@ -90,8 +90,26 @@ function procesarConquista(atacanteId, defensorId) {
     };
 }
 
-// Un país arrasado por bombas sigue vivo (puede resurgir), así que la partida
-// solo termina cuando queda un único país sin eliminar.
+// Dominio total: un país controla todas las celdas del mapa aunque otros sigan
+// "vivos" en ruinas esperando resurgir. Sin esto la partida se quedaba congelada
+// indefinidamente esperando un regalo que resucitara al último caído.
+function declararDominioTotal(ganadorId) {
+    const ganador = estadoPaises[ganadorId];
+    if (!ganador || ganador.eliminado) return null;
+
+    for (const key in estadoPaises) {
+        if (key !== ganadorId && !estadoPaises[key].eliminado) {
+            estadoPaises[key].eliminado = true;
+            estadoPaises[key].owner = ganadorId;
+            estadoPaises[key].territorio = 0;
+        }
+    }
+    ganador.vecinos = [];
+    return ganador;
+}
+
+// La partida tambien termina por la via normal: cuando queda un único país sin
+// eliminar porque se comió a todos los demás.
 function hayGanador() {
     const vivos = Object.values(estadoPaises).filter(p => !p.eliminado);
     return vivos.length === 1 ? vivos[0] : null;
@@ -100,6 +118,7 @@ function hayGanador() {
 module.exports = {
     getEstadoActual,
     hayGanador,
+    declararDominioTotal,
     getOwnerReal,
     procesarConquista,
     reiniciarEstado,

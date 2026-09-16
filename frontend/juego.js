@@ -34,8 +34,12 @@ function getOwnerReal(idPais) {
     return current ? current.id : idPais;
 }
 
+// Evita reportar el mismo final muchas veces mientras llega el reinicio
+let dominioReportado = false;
+
 socket.on('estado_inicial', (estado) => {
     estadoGlobal = estado;
+    dominioReportado = false;
     actualizarInterfazUI(estado);
     
     // Si el grid ya está listo, lo sincronizamos
@@ -404,6 +408,20 @@ setInterval(() => {
 
         if (huboCambios) {
             actualizarInterfazUI(estadoGlobal);
+        }
+
+        // Fin por dominio total: si un solo país conserva celdas, la partida
+        // termina aunque queden países vivos en ruinas. El 255 es tierra muerta,
+        // no pertenece a nadie y no cuenta.
+        const conCeldas = Object.keys(conteos).filter(id => id !== '255' && conteos[id] > 0);
+        if (!dominioReportado && conCeldas.length === 1) {
+            const ganadorId = window.gridManager.paisIntToStr[conCeldas[0]];
+            const vivos = Object.values(estadoGlobal).filter(p => !p.eliminado);
+            if (ganadorId && vivos.length > 1) {
+                dominioReportado = true;
+                console.log(`${ganadorId} domina todo el mapa. Reportando fin de partida.`);
+                socket.emit('reportar_dominio_total', { ganador: ganadorId });
+            }
         }
     }
 }, 1000);
