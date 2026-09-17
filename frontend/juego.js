@@ -397,7 +397,10 @@ setInterval(() => {
         for (const paisStr in estadoGlobal) {
             if (!estadoGlobal[paisStr].eliminado) {
                 const intId = window.gridManager.paisStrToInt[paisStr];
-                const nuevoTerritorio = conteos[intId] || 0; // Si no está en conteos, es 0
+                // Se cuenta en píxeles y no en celdas, para que el ranking no cambie de escala
+                // si cambia el tamaño de celda del grid
+                const tamCelda = window.gridManager.cellSize;
+                const nuevoTerritorio = (conteos[intId] || 0) * tamCelda * tamCelda;
 
                 if (estadoGlobal[paisStr].territorio !== nuevoTerritorio) {
                     estadoGlobal[paisStr].territorio = nuevoTerritorio;

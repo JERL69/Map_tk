@@ -49,7 +49,7 @@ function iniciarCicloEventoMapa(io) {
 // Convierte un regalo en ataques sobre el mapa. Se usa tanto para los regalos
 // reales de TikTok como para los simulados del modo de prueba, para que ambos
 // recorran exactamente el mismo camino.
-function procesarRegalo(io, queueManager, giftName, nickname, multiplicador, etiqueta) {
+function procesarRegalo(io, queueManager, giftName, nickname, multiplicador, etiqueta, opciones) {
     const giftKey = indiceRegalos[normalizarNombre(giftName)] || null;
     const infoRegalo = giftKey ? config.gifts[giftKey] : null;
 
@@ -103,7 +103,9 @@ function procesarRegalo(io, queueManager, giftName, nickname, multiplicador, eti
             usuario: nickname,
             regalo: giftName,
             multiplicador: i === 0 ? multiplicador : 1, // El primero muestra el combo total
-            ocultarAlerta: i > 0, // Solo el primer golpe muestra el popup gigante
+            // Solo el primer golpe muestra el popup gigante, y ninguno si el regalo
+            // es la continuación de un combo que ya tuvo su alerta
+            ocultarAlerta: (opciones && opciones.sinAlerta) || i > 0,
             nombrePais: paisAtacante.nombre
         });
     }
@@ -234,6 +236,9 @@ function connectToTikTokUser(tiktokUsername, io) {
     }, 60000);
     if (vigilanteSala.unref) vigilanteSala.unref();
 
+    // Combos de regalo en curso: cuántos toques de cada racha ya se aplicaron
+    const rachasEnCurso = new Map();
+
     tiktokLiveConnection.on('gift', data => {
         registrarEvento();
 
@@ -249,15 +254,48 @@ function connectToTikTokUser(tiktokUsername, io) {
         });
         tiktokLiveConnection.__regalosCrudos.length = Math.min(tiktokLiveConnection.__regalosCrudos.length, 15);
 
-        if (data.giftType === 1 && !data.repeatEnd) return;
-
         const giftName = data.giftName;
         const nickname = data.nickname;
-        const multiplicador = data.repeatCount ? data.repeatCount : 1;
+        const total = data.repeatCount ? data.repeatCount : 1;
 
-        console.log(`[${tiktokUsername}] Regalo recibido: ${multiplicador}x ${giftName} de ${nickname}`);
+        // Regalos sin combo: se aplican tal cual
+        if (data.giftType !== 1) {
+            console.log(`[${tiktokUsername}] Regalo recibido: ${total}x ${giftName} de ${nickname}`);
+            procesarRegalo(io, queueManager, giftName, nickname, total);
+            return;
+        }
 
-        procesarRegalo(io, queueManager, giftName, nickname, multiplicador);
+        // Regalos de combo (Rosa, TikTok...): TikTok manda un evento por cada toque
+        // con el contador acumulado y otro al cerrar la racha, 3 o 4 segundos
+        // después. Antes se esperaba a ese cierre y el mapa reaccionaba tarde. Ahora
+        // en cada evento se aplica solo lo nuevo desde el anterior: el mapa responde
+        // al primer toque y el combo no se cuenta dos veces.
+        const clave = `${data.userId || data.uniqueId || nickname}|${data.giftId || giftName}`;
+        const ahora = Date.now();
+        let racha = rachasEnCurso.get(clave);
+        // Racha nueva si no había, si el contador volvió a empezar o si la anterior
+        // quedó abandonada sin evento de cierre
+        if (!racha || total < racha.aplicados || ahora - racha.ultimo > 15000) {
+            racha = { aplicados: 0, ultimo: ahora };
+        }
+        const nuevos = total - racha.aplicados;
+        const esPrimerToque = racha.aplicados === 0;
+        racha.aplicados = total;
+        racha.ultimo = ahora;
+
+        if (data.repeatEnd) rachasEnCurso.delete(clave);
+        else rachasEnCurso.set(clave, racha);
+
+        // Limpieza de rachas abandonadas para que el mapa no crezca sin límite
+        if (rachasEnCurso.size > 200) {
+            for (const [k, r] of rachasEnCurso) if (ahora - r.ultimo > 60000) rachasEnCurso.delete(k);
+        }
+
+        if (nuevos <= 0) return;
+
+        console.log(`[${tiktokUsername}] Regalo recibido: +${nuevos}x ${giftName} de ${nickname} ` +
+                    `(combo x${total}${data.repeatEnd ? ', cerrado' : ''})`);
+        procesarRegalo(io, queueManager, giftName, nickname, nuevos, '', { sinAlerta: !esPrimerToque });
     });
 
     tiktokLiveConnection.on('like', data => {

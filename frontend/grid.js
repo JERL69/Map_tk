@@ -57,11 +57,23 @@ class GridManager {
     setupCanvas() {
         this.canvas = document.getElementById('grid-canvas');
         if (!this.canvas) return; // Esperar a que el DOM esté listo
-        
+
         this.canvas.width = this.width;
         this.canvas.height = this.height;
         this.ctx = this.canvas.getContext('2d', { alpha: true });
-        this.imgData = this.ctx.createImageData(this.width, this.height);
+        this.prepararLienzoCeldas();
+    }
+
+    // El grid se dibuja en un lienzo pequeño donde cada celda es un solo píxel, y
+    // luego se amplía sobre el canvas visible con drawImage. Así JavaScript escribe
+    // un valor por celda en vez de copiar cada celda píxel a píxel, y el escalado lo
+    // hace el navegador (normalmente la tarjeta gráfica).
+    prepararLienzoCeldas() {
+        this.lienzoCeldas = document.createElement('canvas');
+        this.lienzoCeldas.width = this.cols;
+        this.lienzoCeldas.height = this.rows;
+        this.ctxCeldas = this.lienzoCeldas.getContext('2d', { alpha: true });
+        this.imgData = this.ctxCeldas.createImageData(this.cols, this.rows);
         this.buf = new Uint32Array(this.imgData.data.buffer);
     }
 
@@ -87,8 +99,7 @@ class GridManager {
             this.canvas.width  = newWidth;
             this.canvas.height = newHeight;
             this.ctx = this.canvas.getContext('2d', { alpha: true });
-            this.imgData = this.ctx.createImageData(newWidth, newHeight);
-            this.buf = new Uint32Array(this.imgData.data.buffer);
+            this.prepararLienzoCeldas();
         }
     }
 
@@ -209,21 +220,16 @@ class GridManager {
                         b = Math.floor(b * factor);
                     }
 
-                    const argb = (255 << 24) | (b << 16) | (g << 8) | r;
-                    const px = cx * this.cellSize;
-                    const py = cy * this.cellSize;
-                    
-                    // Rellenar píxeles físicos del bloque
-                    for (let dy = 0; dy < this.cellSize; dy++) {
-                        for (let dx = 0; dx < this.cellSize; dx++) {
-                            const pixelIndex = (py + dy) * this.width + (px + dx);
-                            this.buf[pixelIndex] = argb;
-                        }
-                    }
+                    this.buf[cellIndex] = (255 << 24) | (b << 16) | (g << 8) | r;
                 }
             }
             
-            this.ctx.putImageData(this.imgData, 0, 0);
+            // Volcar el grid al lienzo pequeño y ampliarlo sin suavizado, para que
+            // las celdas conserven bordes nítidos
+            this.ctxCeldas.putImageData(this.imgData, 0, 0);
+            this.ctx.clearRect(0, 0, this.width, this.height);
+            this.ctx.imageSmoothingEnabled = false;
+            this.ctx.drawImage(this.lienzoCeldas, 0, 0, this.cols * this.cellSize, this.rows * this.cellSize);
 
             // DIBUJAR PARTÍCULAS AMBIENTALES Y EFECTOS EN VIVO (Garantiza movimiento de píxeles constante)
             if (this.particulas && this.particulas.length > 0) {
@@ -436,7 +442,8 @@ class GridManager {
                 }
 
                 // Evitar bugs de teletransportación a países lejanos (distancia > 50 celdas)
-                if (minDistSq > 2500) {
+                const distMax = 50 / this.cellSize; // 50 px, independiente del tamaño de celda
+                if (minDistSq > distMax * distMax) {
                     console.warn(`[GridManager] Ataque bloqueado: ${atacanteStr} está demasiado lejos de ${defensorStr} para iniciar invasión.`);
                     return; // Abortar ataque si están demasiado lejos
                 }
@@ -572,7 +579,8 @@ class GridManager {
     iniciarTormenta() {
         if (this._tormentaInterval) return;
         this._tormentaInterval = setInterval(() => {
-            for (let n = 0; n < 120; n++) {
+            const destellos = Math.ceil(120 / (this.cellSize * this.cellSize));
+            for (let n = 0; n < destellos; n++) {
                 const i = Math.floor(Math.random() * this.numCells);
                 if (this.ownerGrid[i] !== 0) this.glowGrid[i] = 200;
             }
@@ -713,7 +721,9 @@ class GridManager {
     }
 }
 
-// Instanciar globalmente (Resolución de 1 px para evitar pixelado)
+// Instanciar globalmente. Celdas de 2 px: cuatro veces menos trabajo por fotograma que
+// con 1 px, sin cambiar el tamaño del mapa (solo el grano del dibujo). Con 1 px el
+// dibujo se comía casi todo el tiempo de cada fotograma y el mapa iba a tirones.
 // Usar el wrapper 9:16 para que el grid encaje en TikTok LIVE Studio
 ;(function() {
     const _wrapper = document.getElementById('root-wrapper');
@@ -722,5 +732,5 @@ class GridManager {
     
     // Si se está en un entorno de alta resolución (como OBS o Retina), escalamos
     const dpr = window.devicePixelRatio || 1;
-    window.gridManager = new GridManager(_w, _h, 1);
+    window.gridManager = new GridManager(_w, _h, 2);
 })();
