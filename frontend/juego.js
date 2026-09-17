@@ -189,16 +189,21 @@ socket.on('attack', (data) => {
         
         if (defensoresActivos.size > 1) {
             // Múltiples zonas de guerra simultáneas: Mostrar panorama completo
+            window.paisEnfocado = null;
             mapaInteractivos.zoomRestaurar(1200);
             if (window.zoomResetTimeout) clearTimeout(window.zoomResetTimeout);
         } else {
             // Foco exclusivo en el único defensor atacado
-            mapaInteractivos.zoomAPais(defensor, 1500, 3.8); 
-
-            if (window.zoomResetTimeout) clearTimeout(window.zoomResetTimeout);
+            // Si la cámara ya enfoca a ese país no se reinicia el movimiento: repetir
+            // el encuadre con cada regalo hacía que el mapa pareciera moverse sin parar.
+            if (window.paisEnfocado !== defensor) {
+                window.paisEnfocado = defensor;
+                mapaInteractivos.zoomAPais(defensor, 900, 3.8);
+            }if (window.zoomResetTimeout) clearTimeout(window.zoomResetTimeout);
             window.zoomResetTimeout = setTimeout(() => {
                 // Solo alejar la cámara si la guerra se detuvo verdaderamente
                 if (!window.batallasActivas || window.batallasActivas.size === 0) {
+                    window.paisEnfocado = null;
                     mapaInteractivos.zoomRestaurar(2500);
                 }
             }, 6000); 

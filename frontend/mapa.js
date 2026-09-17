@@ -337,12 +337,30 @@ class MapaGeografico {
                     canvas.style.transform = `translate(${event.transform.x}px,${event.transform.y}px) scale(${k})`;
                 }
 
-                this.actualizarLabels(k);
+                // actualizarLabels mide cada etiqueta con getBoundingClientRect, lo que
+                // obliga al navegador a recalcular el diseño. Hacerlo en cada fotograma
+                // del zoom era la causa principal de los tirones, así que se limita a
+                // unas pocas veces por segundo, con una última pasada al terminar.
+                this._labelsPendientes(k);
             });
 
         this.svg.call(zoom);
         this.zoomBehavior = zoom;
         this._aplicarZoomInicial();
+    }
+
+    // Limita actualizarLabels a 5 veces por segundo y garantiza una pasada final
+    _labelsPendientes(k) {
+        const ahora = Date.now();
+        if (!this._ultimoLabels || ahora - this._ultimoLabels > 200) {
+            this._ultimoLabels = ahora;
+            this.actualizarLabels(k);
+        }
+        clearTimeout(this._labelsTimer);
+        this._labelsTimer = setTimeout(() => {
+            this._ultimoLabels = Date.now();
+            this.actualizarLabels(k);
+        }, 220);
     }
 
     _aplicarZoomInicial() {

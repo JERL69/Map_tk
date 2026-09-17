@@ -182,7 +182,15 @@ class GridManager {
 
     startRenderLoop() {
         let frameCount = 0;
-        const render = () => {
+        let ultimoDibujo = 0;
+        // 30 fotogramas por segundo bastan para un mapa, y dejan la mitad del tiempo
+        // de CPU libre para que LIVE Studio codifique el vídeo sin tirones.
+        const msPorFotograma = 1000 / 30;
+
+        const render = (ts) => {
+            requestAnimationFrame(render);
+            if (ts !== undefined && ts - ultimoDibujo < msPorFotograma) return;
+            ultimoDibujo = ts || 0;
             frameCount++;
             // Latido de las zonas en disputa: hace que el frente de batalla "respire"
             const pulso = 0.65 + 0.35 * Math.sin(frameCount * 0.18);
@@ -248,17 +256,21 @@ class GridManager {
 
                     this.ctx.beginPath();
                     this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                    this.ctx.fillStyle = `rgba(0, 242, 254, ${Math.max(0.1, Math.min(0.7, p.alpha))})`;
-                    this.ctx.shadowBlur = 6;
-                    this.ctx.shadowColor = '#00f2fe';
+                    // Sin shadowBlur: el desenfoque de sombra en canvas es de lo más caro que
+                    // hay y se pagaba 35 veces por fotograma. El halo se imita con un
+                    // segundo círculo más grande y translúcido, que es casi gratis.
+                    const a = Math.max(0.1, Math.min(0.7, p.alpha));
+                    this.ctx.fillStyle = `rgba(0, 242, 254, ${a * 0.25})`;
+                    this.ctx.arc(p.x, p.y, p.radius * 2.2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    this.ctx.fillStyle = `rgba(0, 242, 254, ${a})`;
                     this.ctx.fill();
                 }
-                this.ctx.shadowBlur = 0;
             }
-
-            requestAnimationFrame(render);
         };
-        
+
         requestAnimationFrame(render);
     }
 
@@ -465,7 +477,9 @@ class GridManager {
         }
 
         // Bucle de asedio progresivo (60 frames aprox)
-        const damagePerTick = Math.ceil(damageRemaining / 60);
+        // 30 pasos de 16 ms: el avance de cada regalo se completa en medio segundo en
+        // vez de uno, que es parte de la sensación de lentitud al donar.
+        const damagePerTick = Math.ceil(damageRemaining / 30);
 
         const interval = setInterval(() => {
             if (damageRemaining <= 0 || celdasFrontera.length === 0) {

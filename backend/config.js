@@ -32,7 +32,7 @@ module.exports = {
 
     // Configuración de la Cola de Regalos
     queue: {
-        intervaloProcesamientoMs: 300 // Reducido para procesar rápido las lluvias de regalos
+        intervaloProcesamientoMs: 150 // Ritmo al que se sueltan los regalos acumulados
     }
 };
 
