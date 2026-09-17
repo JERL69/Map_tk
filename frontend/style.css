@@ -33,6 +33,19 @@ html {
     background-color: #020408;
 }
 
+/* Modo ajustar (?ajustar=1): para programas como TikTok LIVE Studio, donde el
+   recuadro de la fuente no tiene por qué ser 9:16. El contenedor ocupa todo el
+   recuadro y el fondo exterior es transparente, así que no aparecen franjas. */
+html.modo-ajustar,
+html.modo-ajustar body {
+    background: transparent;
+}
+
+html.modo-ajustar #root-wrapper {
+    width: 100vw;
+    height: 100vh;
+}
+
 /* =============================================
    MAPA — PANTALLA COMPLETA
    ============================================= */

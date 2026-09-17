@@ -10,6 +10,15 @@
     
     <link rel="stylesheet" href="style.css">
 
+    <!-- Modo ajustar (?ajustar=1): el overlay rellena el recuadro que le den, sin
+         forzar la proporcion 9:16 ni pintar franjas negras. Se activa aqui, antes
+         de que el mapa mida su contenedor. Sin el parametro todo queda igual. -->
+    <script>
+        if (new URLSearchParams(location.search).get('ajustar') === '1') {
+            document.documentElement.classList.add('modo-ajustar');
+        }
+    </script>
+
     <!-- Dependencias -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3"></script>
